@@ -23,6 +23,8 @@ import {
   Rocket,
   Watch,
   Building2,
+  Sun,
+  Moon,
 } from 'lucide-react'
 
 const ASPECTS = [
@@ -119,7 +121,7 @@ function Sidebar({ active, onNavigate }) {
   )
 }
 
-function Topbar({ credits, onNew }) {
+function Topbar({ credits, onNew, theme, onToggleTheme }) {
   return (
     <header className="topbar">
       <div className="top-heading">
@@ -134,6 +136,9 @@ function Topbar({ credits, onNew }) {
           <Gem size={15} fill="currentColor" />
           <span>{credits}</span>
           <span className="credits-label">credits</span>
+        </button>
+        <button className="icon-btn theme-btn" onClick={onToggleTheme} aria-label="Toggle theme" title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+          {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
         <button className="icon-btn" aria-label="Notifications">
           <Bell size={18} />
@@ -209,6 +214,10 @@ function PrintCard({ entry, index }) {
 }
 
 export default function App() {
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem('pixora-theme')
+    return saved === 'light' ? 'light' : 'dark'
+  })
   const [activeNav, setActiveNav] = useState('generate')
   const [prints, setPrints] = useState([])
   const [prompt, setPrompt] = useState('')
@@ -223,6 +232,11 @@ export default function App() {
 
   const loadedHistory = useRef(false)
   const galleryRef = useRef(null)
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem('pixora-theme', theme)
+  }, [theme])
 
   useEffect(() => {
     if (loadedHistory.current) return
@@ -300,7 +314,7 @@ export default function App() {
 
       <main className="main">
         <div className="main-body">
-          <Topbar credits={120} onNew={() => setPrompt('')} />
+          <Topbar credits={120} onNew={() => setPrompt('')} theme={theme} onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} />
 
           <section className="panel generate-panel">
             <form onSubmit={handleGenerate}>
