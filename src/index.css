@@ -10,13 +10,13 @@
   --text: #f4f4f6;
   --text-2: #a3a3ad;
   --text-3: #6f6f7a;
-  --orange: #f97316;
-  --orange-hi: #fb923c;
-  --purple: #8b5cf6;
-  --purple-hi: #a78bfa;
-  --grad: linear-gradient(135deg, #f97316 0%, #ea580c 20%, #a855f7 75%, #8b5cf6 100%);
-  --grad-soft: linear-gradient(135deg, rgba(249, 115, 22, 0.14), rgba(139, 92, 246, 0.16));
-  --glow: 0 10px 34px rgba(168, 85, 247, 0.28), 0 2px 10px rgba(249, 115, 22, 0.14);
+  --purple-deep: #380b90;
+  --purple-mid: #672cd1;
+  --purple-soft: #814fce;
+  --purple-hi: #9b5cff;
+  --grad: linear-gradient(135deg, #9b5cff 0%, #814fce 30%, #672cd1 72%, #380b90 100%);
+  --grad-soft: linear-gradient(135deg, rgba(155, 92, 255, 0.16), rgba(103, 44, 209, 0.2));
+  --glow: 0 10px 34px rgba(155, 92, 255, 0.3), 0 2px 10px rgba(103, 44, 209, 0.18);
   --radius-lg: 24px;
   --radius-md: 16px;
   --radius-sm: 10px;
@@ -40,8 +40,8 @@ body {
   margin: 0;
   background: var(--bg);
   background-image:
-    radial-gradient(1100px 600px at 85% -10%, rgba(139, 92, 246, 0.09), transparent 55%),
-    radial-gradient(800px 520px at 20% 115%, rgba(249, 115, 22, 0.06), transparent 55%);
+    radial-gradient(1100px 600px at 85% -10%, rgba(103, 44, 209, 0.1), transparent 55%),
+    radial-gradient(800px 520px at 20% 115%, rgba(103, 44, 209, 0.08), transparent 55%);
   background-attachment: fixed;
   color: var(--text);
   font-family: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
@@ -51,7 +51,7 @@ body {
 }
 
 body::selection {
-  background: rgba(139, 92, 246, 0.4);
+  background: rgba(103, 44, 209, 0.4);
   color: #fff;
 }
 
@@ -107,19 +107,16 @@ button {
 .side-logo {
   display: flex;
   align-items: center;
-  gap: 11px;
+  justify-content: flex-start;
+  gap: 10px;
   padding: 2px 8px 26px;
 }
 
-.logo-mark {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 11px;
-  background: var(--grad);
-  color: #fff;
-  box-shadow: var(--glow);
+.logo-img {
+  width: auto;
+  height: 36px;
+  max-width: 100%;
+  object-fit: contain;
 }
 
 .logo-word {
@@ -244,7 +241,7 @@ button {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: linear-gradient(135deg, #f97316, #8b5cf6);
+  background: linear-gradient(135deg, #9b5cff, #672cd1);
   color: #fff;
   font-weight: 600;
   flex-shrink: 0;
@@ -373,8 +370,8 @@ button {
 }
 
 .credits-chip svg {
-  color: var(--orange-hi);
-  filter: drop-shadow(0 0 6px rgba(249, 115, 22, 0.5));
+  color: var(--purple-hi);
+  filter: drop-shadow(0 0 6px rgba(155, 92, 255, 0.55));
 }
 
 .credits-label {
@@ -415,8 +412,8 @@ button {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--orange);
-  box-shadow: 0 0 0 2px var(--bg-soft), 0 0 8px rgba(249, 115, 22, 0.7);
+  background: var(--purple-hi);
+  box-shadow: 0 0 0 2px var(--bg-soft), 0 0 8px rgba(155, 92, 255, 0.7);
 }
 
 .new-btn {
@@ -478,8 +475,8 @@ button {
 }
 
 .prompt-row textarea:focus {
-  border-color: rgba(168, 85, 247, 0.55);
-  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.12), 0 0 30px rgba(139, 92, 246, 0.12);
+  border-color: rgba(155, 92, 255, 0.55);
+  box-shadow: 0 0 0 4px rgba(103, 44, 209, 0.14), 0 0 30px rgba(103, 44, 209, 0.14);
 }
 
 .char-count {
@@ -495,35 +492,48 @@ button {
 }
 
 .suggestions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 
 .sugg-label {
+  display: block;
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.12em;
   color: var(--text-3);
-  margin-right: 2px;
+  margin-bottom: 10px;
+}
+
+.sugg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(218px, 1fr));
+  gap: 8px;
 }
 
 .sugg-chip {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  border-radius: 999px;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
   border: 1px solid var(--line);
   background: rgba(255, 255, 255, 0.03);
   color: var(--text-2);
   font-size: 12.5px;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  line-height: 1.35;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
-.sugg-chip svg {
+.sugg-icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--grad-soft);
+  border: 1px solid var(--line-strong);
   color: var(--purple-hi);
 }
 
@@ -531,6 +541,7 @@ button {
   background: var(--grad-soft);
   color: var(--text);
   border-color: var(--line-strong);
+  transform: translateY(-1px);
 }
 
 .prompt-footer {
@@ -565,7 +576,7 @@ button {
 
 .adv-toggle.open {
   color: var(--purple-hi);
-  border-color: rgba(168, 85, 247, 0.4);
+  border-color: rgba(155, 92, 255, 0.4);
 }
 
 .adv-chev {
@@ -607,7 +618,7 @@ button {
 .btn-primary:hover:not(:disabled) {
   filter: brightness(1.08);
   transform: translateY(-1px);
-  box-shadow: 0 14px 42px rgba(168, 85, 247, 0.35), 0 2px 12px rgba(249, 115, 22, 0.18);
+  box-shadow: 0 14px 42px rgba(155, 92, 255, 0.35), 0 2px 12px rgba(103, 44, 209, 0.2);
 }
 
 .btn-primary:active:not(:disabled) {
@@ -677,8 +688,8 @@ button {
 }
 
 .select-wrap select:focus {
-  border-color: rgba(168, 85, 247, 0.55);
-  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.12);
+  border-color: rgba(155, 92, 255, 0.55);
+  box-shadow: 0 0 0 4px rgba(103, 44, 209, 0.14);
 }
 
 .select-chev {
@@ -718,7 +729,7 @@ button {
   background: var(--grad);
   color: #fff;
   font-weight: 600;
-  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.3);
+  box-shadow: 0 4px 14px rgba(155, 92, 255, 0.32);
 }
 
 .toggle-group {
@@ -788,7 +799,7 @@ button {
 }
 
 .toggle-input:checked + .toggle-track {
-  background: linear-gradient(135deg, #f97316, #8b5cf6);
+  background: linear-gradient(135deg, #9b5cff, #672cd1);
 }
 
 .toggle-input:checked + .toggle-track .toggle-thumb {
@@ -855,7 +866,7 @@ button {
 .result-card:hover {
   transform: translateY(-4px);
   border-color: var(--line-strong);
-  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.45), 0 0 24px rgba(139, 92, 246, 0.1);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.45), 0 0 24px rgba(103, 44, 209, 0.12);
 }
 
 .result-thumb {
@@ -1092,10 +1103,10 @@ button {
     --sidebar-w: 84px;
   }
 
-  .logo-word,
   .nav-text,
   .nav-chev,
   .nav-label,
+  .logo-word,
   .profile-meta,
   .profile-card .icon-btn,
   .plan-card {
@@ -1105,6 +1116,10 @@ button {
   .side-logo {
     justify-content: center;
     padding: 2px 0 26px;
+  }
+
+  .logo-img {
+    height: 26px;
   }
 
   .nav-item {

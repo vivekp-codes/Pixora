@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Sparkles,
+  WandSparkles,
   Wand2,
   Compass,
   Images,
@@ -17,10 +17,14 @@ import {
   SlidersHorizontal,
   Search,
   Plus,
+  Car,
+  Bike,
+  Bot,
+  Rocket,
+  Watch,
+  Building2,
 } from 'lucide-react'
 
-const MODELS = ['Pixora 2.0', 'Pixora Pro', 'Flux', 'SDXL Turbo', 'Midjourney v6']
-const STYLES = ['None', 'Cinematic', 'Photorealistic', 'Anime', '3D Render', 'Painterly', 'Cyberpunk']
 const ASPECTS = [
   { id: '1:1', w: 1, h: 1, label: '1:1' },
   { id: '4:3', w: 4, h: 3, label: '4:3' },
@@ -36,10 +40,12 @@ const RESOLUTIONS = [
 const IMAGE_OPTIONS = [1, 2, 4]
 
 const SUGGESTIONS = [
-  'Cinematic portrait, moody teal and orange light',
-  'Futuristic neon megacity at night, rain',
-  'Luxury product render, black and gold',
-  'Surreal floating islands above a violet sea',
+  { icon: Car, text: 'midnight hypercar, cyberpunk boulevard, neon reflections' },
+  { icon: Bike, text: 'neon superbike, rain-soaked highway, cyberpunk night' },
+  { icon: Bot, text: 'humanoid android, chrome armor, futuristic laboratory' },
+  { icon: Rocket, text: 'luxury starship, deep space, cinematic nebula glow' },
+  { icon: Watch, text: 'futuristic skeleton watch, obsidian & rose gold, studio shine' },
+  { icon: Building2, text: 'megacity 2099, neon towers, flying cars, rainy night' },
 ]
 
 function Avatar({ name, size = 'md' }) {
@@ -68,9 +74,7 @@ function Sidebar({ active, onNavigate }) {
   return (
     <aside className="sidebar">
       <div className="side-logo">
-        <span className="logo-mark">
-          <Sparkles size={18} />
-        </span>
+        <img src="/pixora.png" alt="Pixora" className="logo-img" />
         <span className="logo-word">Pixora</span>
       </div>
 
@@ -144,24 +148,6 @@ function Topbar({ credits, onNew }) {
   )
 }
 
-function Select({ label, value, options, onChange }) {
-  return (
-    <label className="field">
-      <span className="field-label">{label}</span>
-      <span className="select-wrap">
-        <select value={value} onChange={(e) => onChange(e.target.value)}>
-          {options.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-        <ChevronDown size={14} className="select-chev" aria-hidden="true" />
-      </span>
-    </label>
-  )
-}
-
 function Segmented({ label, value, options, onChange }) {
   return (
     <div className="field">
@@ -178,26 +164,6 @@ function Segmented({ label, value, options, onChange }) {
         ))}
       </div>
     </div>
-  )
-}
-
-function Toggle({ label, hint, checked, onChange }) {
-  return (
-    <label className="toggle-row">
-      <span className="toggle-text">
-        <span className="toggle-title">{label}</span>
-        <span className="toggle-hint">{hint}</span>
-      </span>
-      <input
-        type="checkbox"
-        className="toggle-input"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-      />
-      <span className="toggle-track" aria-hidden="true">
-        <span className="toggle-thumb" />
-      </span>
-    </label>
   )
 }
 
@@ -250,13 +216,9 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false)
   const [generated, setGenerated] = useState(0)
 
-  const [model, setModel] = useState(MODELS[0])
-  const [style, setStyle] = useState(STYLES[0])
   const [aspect, setAspect] = useState(ASPECTS[0])
   const [resolution, setResolution] = useState(RESOLUTIONS[1])
   const [imageCount, setImageCount] = useState(IMAGE_OPTIONS[0])
-  const [upscale, setUpscale] = useState(false)
-  const [enhance, setEnhance] = useState(true)
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   const loadedHistory = useRef(false)
@@ -291,7 +253,7 @@ export default function App() {
       return
     }
 
-    const finalPrompt = style === 'None' ? trimmed : `${trimmed}, ${style.toLowerCase()} style`
+    const finalPrompt = trimmed
 
     setIsGenerating(true)
     setGenerated(0)
@@ -357,11 +319,17 @@ export default function App() {
 
               <div className="suggestions">
                 <span className="sugg-label">TRY</span>
-                {SUGGESTIONS.map((s) => (
-                  <button type="button" key={s} className="sugg-chip" onClick={() => applySuggestion(s)}>
-                    <Sparkles size={12} /> {s}
-                  </button>
-                ))}
+                <div className="sugg-grid">
+                  {SUGGESTIONS.map((s) => {
+                    const SuggIcon = s.icon
+                    return (
+                      <button type="button" key={s.text} className="sugg-chip" onClick={() => applySuggestion(s.text)}>
+                        <span className="sugg-icon"><SuggIcon size={15} strokeWidth={1.8} /></span>
+                        <span className="sugg-text">{s.text}</span>
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
 
               <div className="prompt-footer">
@@ -383,7 +351,7 @@ export default function App() {
                       </>
                     ) : (
                       <>
-                        <Sparkles size={17} /> Generate
+                        <WandSparkles size={17} strokeWidth={1.8} /> Generate
                       </>
                     )}
                   </button>
@@ -393,8 +361,6 @@ export default function App() {
 
             <div className={`adv-panel${showAdvanced ? ' open' : ''}`}>
               <div className="adv-grid">
-                <Select label="Model" value={model} options={MODELS} onChange={setModel} />
-                <Select label="Style" value={style} options={STYLES} onChange={setStyle} />
                 <Segmented label="Aspect ratio" value={aspect.id} options={ASPECTS} onChange={setAspect} />
                 <Segmented label="Resolution" value={resolution.id} options={RESOLUTIONS} onChange={setResolution} />
                 <Segmented
@@ -403,10 +369,6 @@ export default function App() {
                   options={IMAGE_OPTIONS.map((n) => ({ id: n, label: n }))}
                   onChange={(o) => setImageCount(o.id ?? o)}
                 />
-                <div className="toggle-group">
-                  <Toggle label="Enhance quality" hint="Adds structure & detail pass" checked={enhance} onChange={setEnhance} />
-                  <Toggle label="Upscale after render" hint="2× super-resolution" checked={upscale} onChange={setUpscale} />
-                </div>
               </div>
             </div>
           </section>
