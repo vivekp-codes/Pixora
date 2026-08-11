@@ -97,6 +97,30 @@ app.post("/api/generate", async (req, res) => {
   }
 });
 
+// Delete a print by id: removes its record from history.json and the file on disk
+app.post("/api/delete", (req, res) => {
+  const id = (req.body.id || "").trim();
+  if (!id) {
+    return res.status(400).json({ error: "An image id is required." });
+  }
+
+  const history = readHistory();
+  const entry = history.find((e) => e.id === id);
+  if (!entry) {
+    return res.status(404).json({ error: "Image not found." });
+  }
+
+  // Only ever touch a filename derived from our own stored url, never a raw path
+  const filename = path.basename(entry.url || "");
+  const filePath = path.join(GENERATED_DIR, filename);
+  if (filename && fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+
+  writeHistory(history.filter((e) => e.id !== id));
+  res.json({ ok: true, id });
+});
+
 // In production, serve the built React app. In dev, the Vite dev server
 // (port 5173) handles the frontend and proxies /api here instead.
 if (fs.existsSync(CLIENT_DIST)) {
