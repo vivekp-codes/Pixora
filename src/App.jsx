@@ -33,6 +33,9 @@ import {
   Expand,
   X,
   AlertTriangle,
+  Check,
+  Crown,
+  ArrowLeft,
 } from 'lucide-react'
 
 const ASPECTS = [
@@ -48,6 +51,22 @@ const RESOLUTIONS = [
   { id: 'High', px: 1024, label: 'High' },
 ]
 const IMAGE_OPTIONS = [1, 2, 4]
+
+const DEFAULT_SETTINGS = {
+  name: 'Akshay Kumar',
+  email: 'akshay@pixora.ai',
+  autoplay: true,
+  defAspect: 'square',
+  defResolution: 'High',
+  defCount: 1,
+  notify: { generated: true, regenerated: true, deleted: true, favorite: true },
+}
+const NOTIFY_LABELS = {
+  generated: 'New generations',
+  regenerated: 'Regenerated images',
+  deleted: 'Deleted images',
+  favorite: 'Favorites',
+}
 
 const VOWELS = new Set(['a', 'e', 'i', 'o', 'u', 'y'])
 
@@ -109,7 +128,7 @@ function Avatar({ name, size = 'md' }) {
   )
 }
 
-function Sidebar({ active, onNavigate }) {
+function Sidebar({ active, onNavigate, user, onOpenSettings, onUpgrade }) {
   const items = [
     { id: 'generate', label: 'Generate', icon: Wand2 },
     { id: 'explore', label: 'Explore', icon: Compass },
@@ -146,19 +165,28 @@ function Sidebar({ active, onNavigate }) {
 
       <div className="side-bottom">
         <div className="profile-card">
-        <Avatar name="Alex" />
+        <Avatar name={user.name} />
           <div className="profile-meta">
-            <span className="profile-name">Akshay Kumar</span>
-            <span className="profile-mail">akshay@pixora.ai</span>
+            <span className="profile-name">{user.name}</span>
+            <span className="profile-mail">{user.email}</span>
           </div>
-          <button className="icon-btn icon-btn-sm" aria-label="Settings">
+          <button className="icon-btn icon-btn-sm" aria-label="Settings" onClick={onOpenSettings}>
             <Settings size={16} />
           </button>
         </div>
         <div className="plan-card">
-          <span className="plan-tag">PLAN</span>
-          <span className="plan-name">Pro · 128 credits</span>
-          <button className="plan-btn">Upgrade</button>
+          <div className="plan-head">
+            <span className="plan-badge">PRO</span>
+            <span className="plan-credits"><Gem size={12} /> 128</span>
+          </div>
+          <p className="plan-name">Credits remaining</p>
+          <div className="plan-track">
+            <span className="plan-fill" style={{ width: '64%' }} />
+          </div>
+          <div className="plan-meta">
+            <span>128 of 200 used</span>
+            <button className="plan-btn" onClick={onUpgrade}>Upgrade</button>
+          </div>
         </div>
       </div>
     </aside>
@@ -240,7 +268,7 @@ function NotificationsPanel({ items, onClearAll, onDelete, onItemClick }) {
   )
 }
 
-function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen, onToggleNotif, onClearAll, onDeleteNotif, onNotifItem, showHero }) {
+function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen, onToggleNotif, onClearAll, onDeleteNotif, onNotifItem, showHero, userName, videoAutoplay }) {
   const unread = notifications.filter((n) => !n.read).length
   const notifRef = useRef(null)
   const vidRef = useRef(null)
@@ -294,12 +322,12 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
         <button className="new-btn" onClick={onNew}>
           <Plus size={16} /> New
         </button>
-        <Avatar name="Vivek Sharma" />
+        <Avatar name={userName} />
       </div>
 
       {showHero && (
         <div className="hero-greeting">
-          <h2>Hello, Alex</h2>
+          <h2>Hello, {userName.trim().split(' ')[0] || 'there'}</h2>
           <p>What are you creating today?</p>
         </div>
       )}
@@ -318,7 +346,7 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
               ref={vidRef}
               className={vidSeam ? 'seaming' : ''}
               src="/video/vid.mp4"
-              autoPlay
+              autoPlay={videoAutoplay}
               muted
               loop
               playsInline
@@ -587,21 +615,328 @@ function HistoryRow({ entry, isFavorite, onToggleFavorite, onView, onDelete }) {
   )
 }
 
+function SettingsModal({ settings, onChange, onClose, theme, onToggleTheme, onApplyDefaults, onClearHistory, onClearFavs, onClearNotifs, historyCount, favCount, notifCount }) {
+  const [confirm, setConfirm] = useState('')
+
+  function patch(partial) {
+    onChange({ ...settings, ...partial })
+  }
+
+  function patchNotify(key, val) {
+    onChange({ ...settings, notify: { ...settings.notify, [key]: val } })
+  }
+
+  function danger(key, fn) {
+    if (confirm !== key) {
+      setConfirm(key)
+      setTimeout(() => setConfirm((c) => (c === key ? '' : c)), 3000)
+      return
+    }
+    setConfirm('')
+    fn()
+  }
+
+  return (
+    <div className="modal-overlay settings-overlay" onClick={onClose}>
+      <div className="modal-panel settings-panel" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Settings">
+        <div className="settings-head">
+          <div>
+            <h3 className="modal-title">Settings</h3>
+            <p className="settings-sub">Personalize your Pixora workspace.</p>
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="Close settings"><X size={18} /></button>
+        </div>
+
+        <div className="settings-body">
+          <section className="settings-section">
+            <h4 className="settings-section-title">Profile</h4>
+            <div className="settings-grid">
+              <label className="setting-field">
+                <span>Display name</span>
+                <input
+                  value={settings.name}
+                  onChange={(e) => patch({ name: e.target.value })}
+                  placeholder="Your name"
+                />
+              </label>
+              <label className="setting-field">
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={settings.email}
+                  onChange={(e) => patch({ email: e.target.value })}
+                  placeholder="you@pixora.ai"
+                />
+              </label>
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <h4 className="settings-section-title">Appearance</h4>
+            <div className="settings-row">
+              <div className="settings-row-text">
+                <span>Light theme</span>
+                <small>Switch between dark and light mode</small>
+              </div>
+              <button className={`toggle${theme === 'light' ? ' on' : ''}`} onClick={onToggleTheme} aria-pressed={theme === 'light'}>
+                <span className="toggle-knob" />
+              </button>
+            </div>
+            <div className="settings-row">
+              <div className="settings-row-text">
+                <span>Video preview autoplay</span>
+                <small>Auto-play the hero video on the home page</small>
+              </div>
+              <button className={`toggle${settings.autoplay ? ' on' : ''}`} onClick={() => patch({ autoplay: !settings.autoplay })} aria-pressed={settings.autoplay}>
+                <span className="toggle-knob" />
+              </button>
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <h4 className="settings-section-title">Generation defaults</h4>
+            <p className="settings-hint">Presets for the generate panel — applied instantly.</p>
+            <div className="settings-grid three">
+              <label className="setting-field">
+                <span>Aspect ratio</span>
+                <select
+                  value={settings.defAspect}
+                  onChange={(e) => {
+                    const opt = ASPECTS.find((x) => x.id === e.target.value)
+                    patch({ defAspect: e.target.value })
+                    if (opt) onApplyDefaults({ aspect: opt })
+                  }}
+                >
+                  {ASPECTS.map((a) => (
+                    <option key={a.id} value={a.id}>{a.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="setting-field">
+                <span>Resolution</span>
+                <select
+                  value={settings.defResolution}
+                  onChange={(e) => {
+                    const opt = RESOLUTIONS.find((x) => x.id === e.target.value)
+                    patch({ defResolution: e.target.value })
+                    if (opt) onApplyDefaults({ resolution: opt })
+                  }}
+                >
+                  {RESOLUTIONS.map((r) => (
+                    <option key={r.id} value={r.id}>{r.label}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="setting-field">
+                <span>Images</span>
+                <select
+                  value={settings.defCount}
+                  onChange={(e) => {
+                    const n = Number(e.target.value)
+                    patch({ defCount: n })
+                    onApplyDefaults({ count: n })
+                  }}
+                >
+                  {IMAGE_OPTIONS.map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          </section>
+
+          <section className="settings-section">
+            <h4 className="settings-section-title">Notifications</h4>
+            <p className="settings-hint">Choose which events appear in the notification bell.</p>
+            {Object.keys(NOTIFY_LABELS).map((key) => (
+              <div className="settings-row" key={key}>
+                <div className="settings-row-text">
+                  <span>{NOTIFY_LABELS[key]}</span>
+                </div>
+                <button
+                  className={`toggle${settings.notify[key] ? ' on' : ''}`}
+                  onClick={() => patchNotify(key, !settings.notify[key])}
+                  aria-pressed={settings.notify[key]}
+                >
+                  <span className="toggle-knob" />
+                </button>
+              </div>
+            ))}
+          </section>
+
+          <section className="settings-section">
+            <h4 className="settings-section-title danger-title">Data</h4>
+            <div className="settings-data-list">
+              <div className="settings-row">
+                <div className="settings-row-text">
+                  <span>Clear history</span>
+                  <small>{historyCount} saved generations</small>
+                </div>
+                <button
+                  className={`data-btn${confirm === 'history' ? ' confirm' : ''}`}
+                  onClick={() => danger('history', onClearHistory)}
+                >
+                  {confirm === 'history' ? 'Confirm?' : 'Clear'}
+                </button>
+              </div>
+              <div className="settings-row">
+                <div className="settings-row-text">
+                  <span>Clear favorites</span>
+                  <small>{favCount} favorited images</small>
+                </div>
+                <button
+                  className={`data-btn${confirm === 'favs' ? ' confirm' : ''}`}
+                  onClick={() => danger('favs', onClearFavs)}
+                >
+                  {confirm === 'favs' ? 'Confirm?' : 'Clear'}
+                </button>
+              </div>
+              <div className="settings-row">
+                <div className="settings-row-text">
+                  <span>Clear notifications</span>
+                  <small>{notifCount} recent alerts</small>
+                </div>
+                <button
+                  className={`data-btn${confirm === 'notifs' ? ' confirm' : ''}`}
+                  onClick={() => danger('notifs', onClearNotifs)}
+                >
+                  {confirm === 'notifs' ? 'Confirm?' : 'Clear'}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div className="settings-foot">
+          <button className="ghost-btn" onClick={onClose}>Done</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PricingModal({ onClose, onSelect }) {
+  const plans = [
+    {
+      id: 'pro',
+      name: 'Pro',
+      price: '$12',
+      per: 'per month',
+      credits: '200 credits / month',
+      features: ['4K generation', 'Priority queue', 'No watermarks', 'Private renders', 'Email support'],
+      featured: false,
+    },
+    {
+      id: 'studio',
+      name: 'Studio',
+      price: '$29',
+      per: 'per month',
+      credits: '100 credits / month',
+      features: ['Everything in Pro', 'Team workspace', 'API access', 'Custom styles', 'Dedicated support'],
+      featured: true,
+    },
+    {
+      id: 'enterprise',
+      name: 'Enterprise',
+      price: '$59',
+      per: 'per month',
+      credits: 'Unlimited everything',
+      features: ['Everything in Studio', 'Custom model training', 'Private API gateway', 'SLA & uptime guarantee', 'Dedicated success manager'],
+      featured: false,
+    },
+  ]
+
+  return (
+    <div className="modal-overlay pricing-overlay" onClick={onClose}>
+      <div className="modal-panel pricing-panel" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Pricing plans">
+        <div className="pricing-head">
+          <div>
+            <h3 className="modal-title">Upgrade your plan</h3>
+            <p className="settings-sub">Pick the tier that fits how you create.</p>
+          </div>
+          <button className="icon-btn" onClick={onClose} aria-label="Close pricing"><X size={18} /></button>
+        </div>
+
+        <div className="pricing-grid">
+          {plans.map((p) => (
+            <div className={`pricing-card${p.featured ? ' featured' : ''}`} key={p.id}>
+              {p.featured && <span className="pricing-pop"><Crown size={11} /> CURRENTLY BEST</span>}
+              <span className="pricing-name">{p.name}</span>
+              <div className="pricing-price">
+                <strong>{p.price}</strong>
+                <span>{p.per}</span>
+              </div>
+              <p className="pricing-credits">{p.credits}</p>
+              <ul className="pricing-features">
+                {p.features.map((f) => (
+                  <li key={f}><Check size={13} strokeWidth={2.4} /> {f}</li>
+                ))}
+              </ul>
+              <button className="pricing-cta" onClick={() => onSelect(p.name)}>
+                Select plan
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function NotFoundPage({ plan, onBack }) {
+  return (
+    <div className="notfound">
+      <span className="nf-404bg" aria-hidden="true">404</span>
+      <span className="nf-beam" aria-hidden="true" />
+      <span className="nf-spark k1" aria-hidden="true" />
+      <span className="nf-spark k2" aria-hidden="true" />
+      <span className="nf-spark k3" aria-hidden="true" />
+
+      <div className="nf-inner">
+        <div className="nf-logo">
+          <img src="/pixora.png" alt="Pixora" />
+        </div>
+        <span className="nf-eyebrow">ERROR 404</span>
+        <h1 className="nf-glitch">Oops! You&apos;ve wandered off the canvas.</h1>
+        <p>
+          The <strong>{plan}</strong> checkout isn&apos;t ready yet. We&apos;re framing it right now — jump back in and keep creating.
+        </p>
+        <div className="nf-actions">
+          <button className="btn-primary" onClick={onBack}>
+            <ArrowLeft size={16} /> Back to Pixora
+          </button>
+          <button className="ghost-btn" onClick={onBack}>Contact support</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('pixora-theme')
     return saved === 'light' ? 'light' : 'dark'
   })
   const [activeNav, setActiveNav] = useState('generate')
+  const [settings, setSettings] = useState(() => {
+    try {
+      return { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem('pixora-settings') || '{}') }
+    } catch {
+      return { ...DEFAULT_SETTINGS }
+    }
+  })
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [pricingOpen, setPricingOpen] = useState(false)
+  const [notFound, setNotFound] = useState(null)
   const [prints, setPrints] = useState([])
   const [prompt, setPrompt] = useState('')
   const [error, setError] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [generated, setGenerated] = useState(0)
 
-  const [aspect, setAspect] = useState(ASPECTS[0])
-  const [resolution, setResolution] = useState(RESOLUTIONS[1])
-  const [imageCount, setImageCount] = useState(IMAGE_OPTIONS[0])
+  const [aspect, setAspect] = useState(() => ASPECTS.find((a) => a.id === settings.defAspect) || ASPECTS[0])
+  const [resolution, setResolution] = useState(() => RESOLUTIONS.find((r) => r.id === settings.defResolution) || RESOLUTIONS[1])
+  const [imageCount, setImageCount] = useState(() => IMAGE_OPTIONS.includes(settings.defCount) ? settings.defCount : IMAGE_OPTIONS[0])
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   const loadedHistory = useRef(false)
@@ -642,6 +977,10 @@ export default function App() {
   }, [favorites])
 
   useEffect(() => {
+    localStorage.setItem('pixora-settings', JSON.stringify(settings))
+  }, [settings])
+
+  useEffect(() => {
     if (!deleteTarget) return
     function onKey(e) {
       if (e.key === 'Escape') setDeleteTarget(null)
@@ -675,6 +1014,55 @@ export default function App() {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [warnPrompt])
+
+  useEffect(() => {
+    if (!settingsOpen) return
+    function onKey(e) {
+      if (e.key === 'Escape') setSettingsOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [settingsOpen])
+
+  useEffect(() => {
+    if (!pricingOpen) return
+    function onKey(e) {
+      if (e.key === 'Escape') setPricingOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [pricingOpen])
+
+  useEffect(() => {
+    if (!notFound) return
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [notFound])
+
+  function handleClearHistory() {
+    setPrints((prev) => prev.filter((p) => p._pending))
+    notify('History cleared')
+  }
+
+  function handleClearFavs() {
+    setFavorites(new Set())
+    notify('Favorites cleared')
+  }
+
+  function handleSelectPlan(name) {
+    setPricingOpen(false)
+    setNotFound(name)
+  }
 
   function notify(message) {
     setToast(message)
@@ -710,6 +1098,7 @@ export default function App() {
   }
 
   function pushNotification(type, message, image = null) {
+    if (!settings.notify[type]) return
     const n = { id: `n-${Date.now()}-${Math.floor(Math.random() * 1e6)}`, type, message, image, time: new Date().toISOString(), read: false }
     setNotifications((prev) => [n, ...prev].slice(0, 30))
   }
@@ -941,7 +1330,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar active={activeNav} onNavigate={handleNavigate} />
+      <Sidebar active={activeNav} onNavigate={handleNavigate} user={settings} onOpenSettings={() => setSettingsOpen(true)} onUpgrade={() => setPricingOpen(true)} />
 
       <main className="main">
         <div className="main-body">
@@ -957,6 +1346,8 @@ export default function App() {
             onDeleteNotif={handleDeleteNotif}
             onNotifItem={handleNotifItem}
             showHero={activeNav === 'generate'}
+            userName={settings.name}
+            videoAutoplay={settings.autoplay}
           />
 
           {activeNav === 'generate' && (
@@ -1307,6 +1698,33 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {pricingOpen && (
+        <PricingModal onClose={() => setPricingOpen(false)} onSelect={handleSelectPlan} />
+      )}
+
+      {notFound && <NotFoundPage plan={notFound} onBack={() => setNotFound(null)} />}
+
+      {settingsOpen && (
+        <SettingsModal
+          settings={settings}
+          onChange={setSettings}
+          onClose={() => setSettingsOpen(false)}
+          theme={theme}
+          onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+          onApplyDefaults={({ aspect: a, resolution: r, count: c } = {}) => {
+            if (a) setAspect(a)
+            if (r) setResolution(r)
+            if (c !== undefined) setImageCount(c)
+          }}
+          onClearHistory={handleClearHistory}
+          onClearFavs={handleClearFavs}
+          onClearNotifs={handleClearNotifs}
+          historyCount={historyEntries.length}
+          favCount={favs.length}
+          notifCount={notifications.length}
+        />
       )}
     </div>
   )
