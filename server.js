@@ -56,8 +56,8 @@ app.post("/api/generate", async (req, res) => {
   if (!prompt) {
     return res.status(400).json({ error: "A prompt is required." });
   }
-  if (prompt.length > 500) {
-    return res.status(400).json({ error: "Keep prompts under 500 characters." });
+  if (prompt.length > 1000) {
+    return res.status(400).json({ error: "Keep prompts under 1000 characters." });
   }
 
   const seed = Math.floor(Math.random() * 1_000_000);

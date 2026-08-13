@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   WandSparkles,
+  Brain,
   Wand2,
   Compass,
   Images,
@@ -31,6 +32,7 @@ import {
   Trash2,
   Expand,
   X,
+  AlertTriangle,
 } from 'lucide-react'
 
 const ASPECTS = [
@@ -46,6 +48,43 @@ const RESOLUTIONS = [
   { id: 'High', px: 1024, label: 'High' },
 ]
 const IMAGE_OPTIONS = [1, 2, 4]
+
+const VOWELS = new Set(['a', 'e', 'i', 'o', 'u', 'y'])
+
+function isGibberish(text) {
+  const words = text
+    .toLowerCase()
+    .split(/\s+/)
+    .map((w) => w.replace(/[^a-z]/g, ''))
+    .filter((w) => w.length > 0)
+  if (!words.length) return false
+
+  let totalLetters = 0
+  let totalVowels = 0
+  let anyBadWord = false
+  for (const w of words) {
+    totalLetters += w.length
+    let vowels = 0
+    let maxRun = 0
+    let run = 0
+    for (const ch of w) {
+      if (VOWELS.has(ch)) {
+        vowels++
+        run = 0
+      } else {
+        run++
+        if (run > maxRun) maxRun = run
+      }
+    }
+    totalVowels += vowels
+    if (w.length >= 8 && maxRun >= 5) anyBadWord = true
+    if (w.length >= 4 && vowels === 0) anyBadWord = true
+  }
+  if (totalLetters < 6) return false
+  if (anyBadWord) return true
+  if (totalVowels / totalLetters < 0.2) return true
+  return false
+}
 
 const SUGGESTIONS = [
   { icon: Car, text: 'midnight hypercar, cyberpunk boulevard, neon reflections' },
@@ -107,10 +146,10 @@ function Sidebar({ active, onNavigate }) {
 
       <div className="side-bottom">
         <div className="profile-card">
-          <Avatar name="Vivek Sharma" />
+        <Avatar name="Alex" />
           <div className="profile-meta">
-            <span className="profile-name">Vivek Sharma</span>
-            <span className="profile-mail">vivek@pixora.ai</span>
+            <span className="profile-name">Akshay Kumar</span>
+            <span className="profile-mail">akshay@pixora.ai</span>
           </div>
           <button className="icon-btn icon-btn-sm" aria-label="Settings">
             <Settings size={16} />
@@ -126,16 +165,105 @@ function Sidebar({ active, onNavigate }) {
   )
 }
 
-function Topbar({ credits, onNew, theme, onToggleTheme }) {
+const TYPE_ICON = {
+  generated: WandSparkles,
+  regenerated: RefreshCw,
+  deleted: Trash2,
+  favorite: Heart,
+}
+
+function timeAgo(iso) {
+  const diff = Date.now() - new Date(iso).getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(h / 24)
+  return d === 1 ? 'yesterday' : `${d}d ago`
+}
+
+function NotificationsPanel({ items, onClearAll, onDelete, onItemClick }) {
+  const unread = items.filter((n) => !n.read).length
+  return (
+    <div className="notif-panel">
+      <div className="notif-head">
+        <span className="notif-title">Notifications</span>
+        {unread > 0 && <span className="notif-unread-count">{unread} new</span>}
+        {items.length > 0 && (
+          <button className="notif-clear" onClick={onClearAll}>Clear all</button>
+        )}
+      </div>
+      <div className="notif-list">
+        {items.length === 0 ? (
+          <div className="notif-empty">No notifications yet.</div>
+        ) : (
+          items.map((n) => {
+            const Icon = TYPE_ICON[n.type] || Bell
+            return (
+              <div
+                key={n.id}
+                className={`notif-item${n.read ? '' : ' unread'}`}
+              >
+                <button className="notif-main" onClick={() => onItemClick(n)}>
+                  {n.image && (
+                    <span className="notif-thumb">
+                      <img src={n.image.url} alt={n.image.prompt} loading="lazy" />
+                    </span>
+                  )}
+                  <span className="notif-body">
+                    <span className="notif-reason">
+                      <span className={`notif-ico ${n.type}`}><Icon size={13} /></span>
+                      {n.message}
+                    </span>
+                    {n.image && <span className="notif-prompt">{n.image.prompt}</span>}
+                    <span className="notif-meta">
+                      {n.image && <span className="chip">{n.image.width}×{n.image.height}</span>}
+                      <span className="notif-time">{timeAgo(n.time)}</span>
+                    </span>
+                  </span>
+                </button>
+                <button
+                  className="notif-delete"
+                  title="Delete notification"
+                  aria-label="Delete notification"
+                  onClick={() => onDelete(n.id)}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            )
+          })
+        )}
+      </div>
+    </div>
+  )
+}
+
+function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen, onToggleNotif, onClearAll, onDeleteNotif, onNotifItem, showHero }) {
+  const unread = notifications.filter((n) => !n.read).length
+  const notifRef = useRef(null)
+  const vidRef = useRef(null)
+  const [vidSeam, setVidSeam] = useState(false)
+
+  useEffect(() => {
+    if (!notifOpen) return
+    function handleClick(e) {
+      if (notifRef.current && !notifRef.current.contains(e.target)) onToggleNotif(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [notifOpen, onToggleNotif])
+
+  function handleVideoTime() {
+    const v = vidRef.current
+    if (!v) return
+    if (v.currentTime > v.duration - 0.35) setVidSeam(true)
+    else if (v.currentTime < 0.1) setVidSeam(false)
+  }
+
   return (
     <header className="topbar">
-      <div className="top-heading">
-        <span className="top-eyebrow">
-          <span className="eyebrow-dot" /> AI IMAGE GENERATOR
-        </span>
-        <h1>Create something extraordinary.</h1>
-        <p>Type a prompt, pick a style, and Pixora renders a gallery-ready image.</p>
-      </div>
       <div className="top-actions">
         <button className="credits-chip" aria-label="Credits">
           <Gem size={15} fill="currentColor" />
@@ -145,15 +273,64 @@ function Topbar({ credits, onNew, theme, onToggleTheme }) {
         <button className="icon-btn theme-btn" onClick={onToggleTheme} aria-label="Toggle theme" title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
-        <button className="icon-btn" aria-label="Notifications">
-          <Bell size={18} />
-          <span className="notif-dot" />
-        </button>
+        <div className="notif-wrap" ref={notifRef}>
+          <button
+            className={`icon-btn${notifOpen ? ' active' : ''}`}
+            aria-label="Notifications"
+            onClick={() => onToggleNotif(!notifOpen)}
+          >
+            <Bell size={18} />
+            {unread > 0 && <span className="notif-badge">{unread}</span>}
+          </button>
+          {notifOpen && (
+            <NotificationsPanel
+              items={notifications}
+              onClearAll={onClearAll}
+              onDelete={onDeleteNotif}
+              onItemClick={onNotifItem}
+            />
+          )}
+        </div>
         <button className="new-btn" onClick={onNew}>
           <Plus size={16} /> New
         </button>
         <Avatar name="Vivek Sharma" />
       </div>
+
+      {showHero && (
+        <div className="hero-greeting">
+          <h2>Hello, Alex</h2>
+          <p>What are you creating today?</p>
+        </div>
+      )}
+
+      {showHero && (
+        <div className="hero">
+          <div className="hero-content">
+            <span className="top-eyebrow">
+              <span className="eyebrow-dot" /> AI IMAGE GENERATOR
+            </span>
+            <h1>Create something extraordinary.</h1>
+            <p>Type a prompt, pick a style, and Pixora renders a gallery-ready image.</p>
+          </div>
+          <div className="hero-media">
+            <video
+              ref={vidRef}
+              className={vidSeam ? 'seaming' : ''}
+              src="/video/vid.mp4"
+              autoPlay
+              muted
+              loop
+              playsInline
+              onTimeUpdate={handleVideoTime}
+            />
+          </div>
+          <span className="hero-badge">
+            <span className="hero-pulse" />
+            AI Live
+          </span>
+        </div>
+      )}
     </header>
   )
 }
@@ -230,7 +407,7 @@ function PrintCard({ entry, index, isFavorite, onToggleFavorite, onEdit, onDelet
           <button
             className={`act-btn${isFavorite ? ' fav-on' : ''}`}
             title={isFavorite ? 'Remove favorite' : 'Favorite'}
-            onClick={() => onToggleFavorite(entry.id)}
+            onClick={() => onToggleFavorite(entry)}
           >
             <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
           </button>
@@ -398,7 +575,7 @@ function HistoryRow({ entry, isFavorite, onToggleFavorite, onView, onDelete }) {
         <button
           className={`history-btn${isFavorite ? ' fav-on' : ''}`}
           title={isFavorite ? 'Remove favorite' : 'Favorite'}
-          onClick={() => onToggleFavorite(entry.id)}
+          onClick={() => onToggleFavorite(entry)}
         >
           <Heart size={15} fill={isFavorite ? 'currentColor' : 'none'} />
         </button>
@@ -436,6 +613,7 @@ export default function App() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [viewer, setViewer] = useState(null)
+  const [warnPrompt, setWarnPrompt] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [favorites, setFavorites] = useState(() => {
@@ -445,6 +623,19 @@ export default function App() {
       return new Set()
     }
   })
+
+  const [notifications, setNotifications] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('pixora-notifs') || '[]')
+    } catch {
+      return []
+    }
+  })
+  const [notifOpen, setNotifOpen] = useState(false)
+
+  useEffect(() => {
+    localStorage.setItem('pixora-notifs', JSON.stringify(notifications))
+  }, [notifications])
 
   useEffect(() => {
     localStorage.setItem('pixora-favs', JSON.stringify([...favorites]))
@@ -476,6 +667,15 @@ export default function App() {
     }
   }, [viewer])
 
+  useEffect(() => {
+    if (!warnPrompt) return
+    function onKey(e) {
+      if (e.key === 'Escape') setWarnPrompt(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [warnPrompt])
+
   function notify(message) {
     setToast(message)
     clearTimeout(toastTimer.current)
@@ -491,13 +691,46 @@ export default function App() {
     }
   }
 
-  function toggleFavorite(id) {
+  function toggleFavorite(entry) {
+    const adding = !favorites.has(entry.id)
     setFavorites((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(entry.id)) next.delete(entry.id)
+      else next.add(entry.id)
       return next
     })
+    if (adding) {
+      pushNotification('favorite', 'Added to favorites', {
+        url: entry.url,
+        prompt: entry.prompt,
+        width: entry.width,
+        height: entry.height,
+      })
+    }
+  }
+
+  function pushNotification(type, message, image = null) {
+    const n = { id: `n-${Date.now()}-${Math.floor(Math.random() * 1e6)}`, type, message, image, time: new Date().toISOString(), read: false }
+    setNotifications((prev) => [n, ...prev].slice(0, 30))
+  }
+
+  function handleNotifToggle(open) {
+    setNotifOpen(open)
+    if (open) {
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+    }
+  }
+
+  function handleClearNotifs() {
+    setNotifications([])
+  }
+
+  function handleDeleteNotif(id) {
+    setNotifications((prev) => prev.filter((n) => n.id !== id))
+  }
+
+  function handleNotifItem() {
+    setNotifOpen(false)
   }
 
   function editPrompt(text) {
@@ -505,6 +738,19 @@ export default function App() {
     promptCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     setTimeout(() => promptRef.current?.focus(), 380)
     notify('Prompt loaded for editing')
+  }
+
+  function handleNew() {
+    setActiveNav('generate')
+    setSearchOpen(false)
+    setSearchQuery('')
+    setShowAdvanced(false)
+    setPrompt('')
+    setTimeout(() => {
+      promptCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      setTimeout(() => promptRef.current?.focus(), 400)
+    }, 60)
+    notify('New image — ready when you are')
   }
 
   function fitRect(width, height, max = 1024) {
@@ -546,6 +792,12 @@ export default function App() {
         const target = fitRect(entry.width, entry.height)
         await generateExtra(entry.prompt, target.width, target.height)
         notify('Image regenerated')
+        pushNotification('regenerated', 'Image regenerated', {
+          url: entry.url,
+          prompt: entry.prompt,
+          width: entry.width,
+          height: entry.height,
+        })
       } catch (err) {
         notify(err.message || 'Regeneration failed')
       }
@@ -571,6 +823,12 @@ export default function App() {
       })
       setDeleteTarget(null)
       notify('Image deleted')
+      pushNotification('deleted', 'Image deleted', {
+        url: deleteTarget.url,
+        prompt: deleteTarget.prompt,
+        width: deleteTarget.width,
+        height: deleteTarget.height,
+      })
     } catch (err) {
       notify(err.message || 'Delete failed')
     } finally {
@@ -612,6 +870,11 @@ export default function App() {
       return
     }
 
+    if (isGibberish(trimmed)) {
+      setWarnPrompt(true)
+      return
+    }
+
     const finalPrompt = trimmed
 
     setIsGenerating(true)
@@ -639,6 +902,12 @@ export default function App() {
       if (created.length) {
         setPrints((prev) => [...created, ...prev])
         galleryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        const first = created[0]
+        pushNotification(
+          'generated',
+          created.length > 1 ? `${created.length} new images generated` : 'Your image is ready',
+          { url: first.url, prompt: first.prompt, width: first.width, height: first.height }
+        )
       }
     } catch (err) {
       setError(err.message || 'Something went wrong.')
@@ -662,7 +931,7 @@ export default function App() {
   const favs = filterSearch(prints.filter((p) => !p._pending && favorites.has(p.id)))
   const historyEntries = prints.filter((p) => !p._pending)
 
-  const recent = prints.filter((p) => !p._pending).slice(0, 6)
+  const recent = prints.filter((p) => !p._pending).slice(0, 8)
 
   function handleNavigate(id) {
     setActiveNav(id)
@@ -676,7 +945,19 @@ export default function App() {
 
       <main className="main">
         <div className="main-body">
-          <Topbar credits={120} onNew={() => setPrompt('')} theme={theme} onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} />
+          <Topbar
+            credits={120}
+            onNew={handleNew}
+            theme={theme}
+            onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+            notifications={notifications}
+            notifOpen={notifOpen}
+            onToggleNotif={handleNotifToggle}
+            onClearAll={handleClearNotifs}
+            onDeleteNotif={handleDeleteNotif}
+            onNotifItem={handleNotifItem}
+            showHero={activeNav === 'generate'}
+          />
 
           {activeNav === 'generate' && (
             <>
@@ -689,11 +970,14 @@ export default function App() {
                       value={prompt}
                       onChange={(e) => setPrompt(e.target.value)}
                       placeholder="Describe the image you want to create..."
-                      maxLength={500}
+                      maxLength={1000}
                       rows={3}
                       required
                     />
-                    <span className="char-count">{prompt.length}/500</span>
+                    <span className="char-count">{prompt.length}/1000</span>
+                    <button className="prompt-send" type="submit" disabled={isGenerating}>
+                      {isGenerating ? <span className="spinner" /> : <><Brain size={16} strokeWidth={1.8} /> Generate</>}
+                    </button>
                   </div>
 
                   <div className="suggestions">
@@ -723,17 +1007,6 @@ export default function App() {
                     </button>
                     <div className="footer-right">
                       {error && <p className="error" role="alert" aria-live="polite">{error}</p>}
-                      <button className="btn-primary" type="submit" disabled={isGenerating}>
-                        {isGenerating ? (
-                          <>
-                            <span className="spinner" /> Generating {generated}/{imageCount}
-                          </>
-                        ) : (
-                          <>
-                            <WandSparkles size={17} strokeWidth={1.8} /> Generate
-                          </>
-                        )}
-                      </button>
                     </div>
                   </div>
                 </form>
@@ -801,6 +1074,7 @@ export default function App() {
                 <section className="recent">
                   <div className="section-head">
                     <h2>Recent generations</h2>
+                    <span className="section-count">{recent.length}</span>
                   </div>
                   <div className="recent-strip">
                     {recent.map((entry) => (
@@ -979,6 +1253,31 @@ export default function App() {
                   Download <Download size={14} />
                 </a>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {warnPrompt && (
+        <div className="modal-overlay" onClick={() => setWarnPrompt(false)}>
+          <div className="modal-panel" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Prompt not understood">
+            <div className="modal-icon warn"><AlertTriangle size={24} /></div>
+            <h3 className="modal-title">Prompt not understood</h3>
+            <p className="modal-text">
+              We couldn't make sense of this prompt. Try describing a clear subject, style, and setting with real words.
+            </p>
+            {prompt && <div className="warn-prompt">{prompt}</div>}
+            <div className="modal-actions">
+              <button className="ghost-btn" onClick={() => setWarnPrompt(false)}>Generate anyway</button>
+              <button
+                className="btn-primary sm"
+                onClick={() => {
+                  setWarnPrompt(false)
+                  setTimeout(() => promptRef.current?.focus(), 60)
+                }}
+              >
+                <PenLine size={14} /> Edit prompt
+              </button>
             </div>
           </div>
         </div>
