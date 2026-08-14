@@ -4,3 +4,4 @@ generated/*
 !generated/.gitkeep
 history.json
 *.log
+.env

@@ -615,7 +615,7 @@ function HistoryRow({ entry, isFavorite, onToggleFavorite, onView, onDelete }) {
   )
 }
 
-function SettingsModal({ settings, onChange, onClose, theme, onToggleTheme, onApplyDefaults, onClearHistory, onClearFavs, onClearNotifs, historyCount, favCount, notifCount }) {
+function SettingsModal({ settings, onChange, onClose, onDone, theme, onToggleTheme, onApplyDefaults, onClearHistory, onClearFavs, onClearNotifs, historyCount, favCount, notifCount }) {
   const [confirm, setConfirm] = useState('')
 
   function patch(partial) {
@@ -808,7 +808,7 @@ function SettingsModal({ settings, onChange, onClose, theme, onToggleTheme, onAp
         </div>
 
         <div className="settings-foot">
-          <button className="ghost-btn" onClick={onClose}>Done</button>
+          <button className="ghost-btn" onClick={() => { onClose(); onDone() }}>Done</button>
         </div>
       </div>
     </div>
@@ -883,7 +883,7 @@ function PricingModal({ onClose, onSelect }) {
   )
 }
 
-function NotFoundPage({ plan, onBack }) {
+function NotFoundPage({ onBack }) {
   return (
     <div className="notfound">
       <span className="nf-404bg" aria-hidden="true">404</span>
@@ -893,19 +893,16 @@ function NotFoundPage({ plan, onBack }) {
       <span className="nf-spark k3" aria-hidden="true" />
 
       <div className="nf-inner">
-        <div className="nf-logo">
-          <img src="/pixora.png" alt="Pixora" />
-        </div>
         <span className="nf-eyebrow">ERROR 404</span>
-        <h1 className="nf-glitch">Oops! You&apos;ve wandered off the canvas.</h1>
+        <h1 className="nf-glitch">Page not found</h1>
         <p>
-          The <strong>{plan}</strong> checkout isn&apos;t ready yet. We&apos;re framing it right now — jump back in and keep creating.
+          The page you&apos;re looking for doesn&apos;t exist, may have been moved, or is temporarily unavailable. Please check the address and try again.
         </p>
         <div className="nf-actions">
           <button className="btn-primary" onClick={onBack}>
-            <ArrowLeft size={16} /> Back to Pixora
+            <ArrowLeft size={16} /> Back to home
           </button>
-          <button className="ghost-btn" onClick={onBack}>Contact support</button>
+          <button className="ghost-btn" onClick={onBack}>Try again</button>
         </div>
       </div>
     </div>
@@ -1175,7 +1172,8 @@ export default function App() {
     if (action === 'copy-prompt') {
       return copyText(entry.prompt, 'Prompt copied')
     } else if (action === 'copy-url') {
-      return copyText(`${window.location.origin}${entry.url}`, 'Image URL copied')
+      const absolute = entry.url.startsWith('http') ? entry.url : `${window.location.origin}${entry.url}`
+      return copyText(absolute, 'Image URL copied')
     } else if (action === 'regenerate') {
       try {
         const target = fitRect(entry.width, entry.height)
@@ -1704,13 +1702,14 @@ export default function App() {
         <PricingModal onClose={() => setPricingOpen(false)} onSelect={handleSelectPlan} />
       )}
 
-      {notFound && <NotFoundPage plan={notFound} onBack={() => setNotFound(null)} />}
+      {notFound && <NotFoundPage onBack={() => setNotFound(null)} />}
 
       {settingsOpen && (
         <SettingsModal
           settings={settings}
           onChange={setSettings}
           onClose={() => setSettingsOpen(false)}
+          onDone={() => setTimeout(() => window.location.reload(), 250)}
           theme={theme}
           onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
           onApplyDefaults={({ aspect: a, resolution: r, count: c } = {}) => {

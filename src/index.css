@@ -2858,20 +2858,6 @@ button {
   max-width: 620px;
 }
 
-.nf-logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 30px;
-}
-
-.nf-logo img {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
-  filter: drop-shadow(0 12px 26px rgba(56, 11, 144, 0.5));
-}
-
 .nf-eyebrow {
   display: inline-flex;
   align-items: center;
