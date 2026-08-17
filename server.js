@@ -365,6 +365,58 @@ app.post("/api/profile", requireUser, async (req, res) => {
   }
 });
 
+// Read the signed-in user's display name
+app.get("/api/profile", requireUser, async (req, res) => {
+  if (!req.userClient) {
+    return res.json({ name: "User" });
+  }
+
+  try {
+    const { data, error } = await req.userClient
+      .from("profiles")
+      .select("name")
+      .eq("id", req.user.id)
+      .maybeSingle();
+    if (error) throw error;
+
+    const fallback = (req.user.email || "user@pixora.ai").split("@")[0];
+    const defaultName = fallback.charAt(0).toUpperCase() + fallback.slice(1);
+    res.json({ name: data?.name || defaultName });
+  } catch (err) {
+    console.error("Profile load failed:", err.message);
+    res.status(500).json({ error: "Could not load your profile." });
+  }
+});
+
+// Bulk clear: either the whole history or all favorites
+app.post("/api/clear", requireUser, async (req, res) => {
+  const target = req.body.target;
+
+  if (!req.userClient) {
+    if (target === "history") {
+      writeHistory([]);
+    }
+    return res.json({ ok: true });
+  }
+
+  try {
+    if (target === "history") {
+      const { error } = await req.userClient.from("images").delete().eq("user_id", req.user.id);
+      if (error) throw error;
+    } else if (target === "favorites") {
+      const { error } = await req.userClient
+        .from("images")
+        .update({ favorite: false })
+        .eq("user_id", req.user.id);
+      if (error) throw error;
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("Clear failed:", err.message);
+    res.status(500).json({ error: "Could not clear the images." });
+  }
+});
+
 // In production, serve the built React app. In dev, the Vite dev server
 // (port 5173) handles the frontend and proxies /api here instead.
 if (fs.existsSync(CLIENT_DIST)) {

@@ -36,7 +36,14 @@ import {
   Check,
   Crown,
   ArrowLeft,
+  LogOut,
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  Sparkles,
 } from 'lucide-react'
+import { supabase, authEnabled, getAccessToken } from './supabaseClient'
 
 const ASPECTS = [
   { id: '1:1', w: 1, h: 1, label: '1:1' },
@@ -268,7 +275,7 @@ function NotificationsPanel({ items, onClearAll, onDelete, onItemClick }) {
   )
 }
 
-function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen, onToggleNotif, onClearAll, onDeleteNotif, onNotifItem, showHero, userName, videoAutoplay }) {
+function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen, onToggleNotif, onClearAll, onDeleteNotif, onNotifItem, showHero, userName, videoAutoplay, onLogout }) {
   const unread = notifications.filter((n) => !n.read).length
   const notifRef = useRef(null)
   const vidRef = useRef(null)
@@ -323,6 +330,11 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
           <Plus size={16} /> New
         </button>
         <Avatar name={userName} />
+        {onLogout && (
+          <button className="icon-btn" title="Sign out" aria-label="Sign out" onClick={onLogout}>
+            <LogOut size={17} />
+          </button>
+        )}
       </div>
 
       {showHero && (
@@ -666,6 +678,8 @@ function SettingsModal({ settings, onChange, onClose, onDone, theme, onToggleThe
                   value={settings.email}
                   onChange={(e) => patch({ email: e.target.value })}
                   placeholder="you@pixora.ai"
+                  readOnly={authEnabled}
+                  title={authEnabled ? 'Email is tied to your account' : undefined}
                 />
               </label>
             </div>
@@ -909,6 +923,211 @@ function NotFoundPage({ onBack }) {
   )
 }
 
+function AuthScreen({ onAuthed }) {
+  const [mode, setMode] = useState('signin')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPw, setShowPw] = useState(false)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [sent, setSent] = useState(false)
+
+  async function submit(event) {
+    event.preventDefault()
+    setError('')
+    if (mode === 'signup' && name.trim().length < 2) {
+      setError('Please enter your name.')
+      return
+    }
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      setError('Enter a valid email address.')
+      return
+    }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.')
+      return
+    }
+
+    setBusy(true)
+    try {
+      if (mode === 'signup') {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email,
+          password,
+          options: { data: { full_name: name } },
+        })
+        if (signUpError) throw signUpError
+        if (data.session) {
+          const token = await getAccessToken()
+          if (token) {
+            try {
+              await fetch('/api/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ name: name.trim() }),
+              })
+            } catch {}
+          }
+          onAuthed()
+        } else {
+          setSent(true)
+        }
+      } else {
+        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+        if (signInError) throw signInError
+        onAuthed()
+      }
+    } catch (err) {
+      setError(err.message || 'Something went wrong.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="auth2">
+      <span className="auth2-orb o1" aria-hidden="true" />
+      <span className="auth2-orb o2" aria-hidden="true" />
+      <span className="auth2-grid" aria-hidden="true" />
+
+      <div className="auth2-card">
+        <div className="auth2-visual">
+          <div className="auth2-visual-inner">
+            <div className="auth2-brand">
+              <img src="/pixora.png" alt="Pixora" className="logo-img" />
+              <span className="logo-word">Pixora</span>
+            </div>
+
+            <div className="auth2-copy">
+              <span className="auth2-eyebrow">
+                <span className="auth2-live-dot" /> AI IMAGE STUDIO
+              </span>
+              <h1>Create something extraordinary.</h1>
+              <p>Type a prompt, pick a style, and Pixora renders a gallery-ready image in seconds.</p>
+            </div>
+
+            <ul className="auth2-features">
+              <li><Sparkles size={15} /> Text-to-image generation</li>
+              <li><Gem size={15} /> Studio-quality renders</li>
+              <li><Heart size={15} /> Private cloud gallery</li>
+            </ul>
+          </div>
+
+          <span className="auth2-core" aria-hidden="true" />
+          <span className="auth2-ring" aria-hidden="true" />
+        </div>
+
+        <div className="auth2-form">
+          <div className="auth2-form-inner">
+            <h2 className="auth2-title">
+              {sent ? 'Check your inbox' : mode === 'signin' ? 'Welcome back' : 'Create your account'}
+            </h2>
+            <p className="auth2-sub">
+              {sent
+                ? 'We sent a confirmation link to your email. Open it to activate your account, then sign in below.'
+                : mode === 'signin'
+                  ? 'Sign in to generate, save, and share your AI art.'
+                  : 'Join Pixora and start creating gallery-ready images.'}
+            </p>
+            <div className="auth2-divider" />
+
+            {sent ? (
+              <button className="auth2-cta" onClick={() => setSent(false)}>Back to sign in</button>
+            ) : (
+              <form className="auth2-body" onSubmit={submit}>
+                {mode === 'signup' && (
+                  <label className="auth2-field">
+                    <span className="auth2-label">Name</span>
+                    <input
+                      className="auth2-input"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Your name"
+                      autoComplete="name"
+                    />
+                  </label>
+                )}
+
+                <label className="auth2-field">
+                  <span className="auth2-label">Email</span>
+                  <div className="auth2-input-wrap">
+                    <Mail size={16} className="auth2-input-icon" />
+                    <input
+                      className="auth2-input"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                    />
+                  </div>
+                </label>
+
+                <label className="auth2-field">
+                  <span className="auth2-label">Password</span>
+                  <div className="auth2-pw">
+                    <Lock size={16} className="auth2-input-icon" />
+                    <input
+                      className="auth2-input"
+                      type={showPw ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'}
+                      autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                    />
+                    <button
+                      type="button"
+                      className="auth2-eye"
+                      onClick={() => setShowPw((v) => !v)}
+                      aria-label={showPw ? 'Hide password' : 'Show password'}
+                    >
+                      {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
+                </label>
+
+                {mode === 'signin' && (
+                  <div className="auth2-row">
+                    <button type="button" className="auth2-forgot" onClick={() => setError('Password reset is coming soon.')}>
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
+
+                {error && <p className="auth2-error" role="alert">{error}</p>}
+
+                <button className="auth2-cta" type="submit" disabled={busy}>
+                  {busy ? (
+                    <span className="spinner" />
+                  ) : (
+                    <>
+                      <Sparkles size={16} />
+                      {mode === 'signin' ? 'Sign In' : 'Create account'}
+                    </>
+                  )}
+                </button>
+              </form>
+            )}
+
+            <p className="auth2-alt">
+              {mode === 'signin' ? (
+                <>Don&apos;t have an account?{' '}
+                  <button onClick={() => { setMode('signup'); setError('') }}>Create account</button>
+                </>
+              ) : (
+                <>Already have an account?{' '}
+                  <button onClick={() => { setMode('signin'); setError('') }}>Sign in</button>
+                </>
+              )}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function App() {
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('pixora-theme')
@@ -948,13 +1167,9 @@ export default function App() {
   const [warnPrompt, setWarnPrompt] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [favorites, setFavorites] = useState(() => {
-    try {
-      return new Set(JSON.parse(localStorage.getItem('pixora-favs') || '[]'))
-    } catch {
-      return new Set()
-    }
-  })
+  const [favorites, setFavorites] = useState(new Set())
+  const [session, setSession] = useState(null)
+  const [authReady, setAuthReady] = useState(false)
 
   const [notifications, setNotifications] = useState(() => {
     try {
@@ -970,12 +1185,23 @@ export default function App() {
   }, [notifications])
 
   useEffect(() => {
-    localStorage.setItem('pixora-favs', JSON.stringify([...favorites]))
-  }, [favorites])
-
-  useEffect(() => {
     localStorage.setItem('pixora-settings', JSON.stringify(settings))
   }, [settings])
+
+  useEffect(() => {
+    if (!authEnabled) {
+      setAuthReady(true)
+      return
+    }
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+      setAuthReady(true)
+    })
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession)
+    })
+    return () => sub.subscription.unsubscribe()
+  }, [])
 
   useEffect(() => {
     if (!deleteTarget) return
@@ -1046,12 +1272,41 @@ export default function App() {
     }
   }, [notFound])
 
-  function handleClearHistory() {
+  async function handleClearHistory() {
+    try {
+      const res = await fetch('/api/clear', {
+        method: 'POST',
+        headers: await apiHeaders(),
+        body: JSON.stringify({ target: 'history' }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Could not clear history')
+      }
+    } catch (err) {
+      notify(err.message || 'Could not clear history')
+      return
+    }
     setPrints((prev) => prev.filter((p) => p._pending))
+    setFavorites(new Set())
     notify('History cleared')
   }
 
-  function handleClearFavs() {
+  async function handleClearFavs() {
+    try {
+      const res = await fetch('/api/clear', {
+        method: 'POST',
+        headers: await apiHeaders(),
+        body: JSON.stringify({ target: 'favorites' }),
+      })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Could not clear favorites')
+      }
+    } catch (err) {
+      notify(err.message || 'Could not clear favorites')
+      return
+    }
     setFavorites(new Set())
     notify('Favorites cleared')
   }
@@ -1076,21 +1331,32 @@ export default function App() {
     }
   }
 
-  function toggleFavorite(entry) {
-    const adding = !favorites.has(entry.id)
-    setFavorites((prev) => {
-      const next = new Set(prev)
-      if (next.has(entry.id)) next.delete(entry.id)
-      else next.add(entry.id)
-      return next
-    })
-    if (adding) {
-      pushNotification('favorite', 'Added to favorites', {
-        url: entry.url,
-        prompt: entry.prompt,
-        width: entry.width,
-        height: entry.height,
+  async function toggleFavorite(entry) {
+    const nextVal = !favorites.has(entry.id)
+    try {
+      const res = await fetch('/api/favorite', {
+        method: 'POST',
+        headers: await apiHeaders(),
+        body: JSON.stringify({ id: entry.id, favorite: nextVal }),
       })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Could not update favorite')
+      setFavorites((prev) => {
+        const next = new Set(prev)
+        if (nextVal) next.add(entry.id)
+        else next.delete(entry.id)
+        return next
+      })
+      if (nextVal) {
+        pushNotification('favorite', 'Added to favorites', {
+          url: entry.url,
+          prompt: entry.prompt,
+          width: entry.width,
+          height: entry.height,
+        })
+      }
+    } catch (err) {
+      notify(err.message || 'Could not update favorite')
     }
   }
 
@@ -1155,11 +1421,16 @@ export default function App() {
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await apiHeaders(),
         body: JSON.stringify({ prompt: promptText, width, height }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Something went wrong.')
+      if (!res.ok) {
+        if (data.error && data.error.includes('sign in')) {
+          setSession(null)
+        }
+        throw new Error(data.error || 'Something went wrong.')
+      }
       setPrints((prev) => prev.map((p) => (p.id === id ? data : p)))
       return data
     } catch (err) {
@@ -1197,7 +1468,7 @@ export default function App() {
     try {
       const res = await fetch('/api/delete', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await apiHeaders(),
         body: JSON.stringify({ id: deleteTarget.id }),
       })
       const data = await res.json()
@@ -1228,15 +1499,46 @@ export default function App() {
     localStorage.setItem('pixora-theme', theme)
   }, [theme])
 
+  async function apiHeaders() {
+    const token = authEnabled ? await getAccessToken() : null
+    return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+  }
+
+  async function loadHistory() {
+    try {
+      const res = await fetch('/api/history', { headers: await apiHeaders() })
+      const history = await res.json()
+      if (Array.isArray(history)) {
+        setPrints(history)
+        setFavorites(new Set(history.filter((e) => e.favorite).map((e) => e.id)))
+      }
+    } catch (err) {
+      console.error("Couldn't load history:", err)
+    }
+  }
+
   useEffect(() => {
+    if (authEnabled && !session) return
     if (loadedHistory.current) return
     loadedHistory.current = true
+    loadHistory()
+  }, [session])
 
-    fetch('/api/history')
-      .then((res) => res.json())
-      .then((history) => setPrints(history))
-      .catch((err) => console.error("Couldn't load history:", err))
-  }, [])
+  useEffect(() => {
+    if (!authEnabled || !session) return
+    getAccessToken().then(async (token) => {
+      if (!token) return
+      try {
+        const res = await fetch('/api/profile', { headers: { Authorization: `Bearer ${token}` } })
+        const data = await res.json()
+        if (data.name) {
+          setSettings((prev) => ({ ...prev, name: data.name, email: session.user.email }))
+        }
+      } catch (err) {
+        console.error("Couldn't load profile:", err)
+      }
+    })
+  }, [session])
 
   const dimensions = useMemo(() => {
     const base = resolution.px
@@ -1271,7 +1573,7 @@ export default function App() {
       for (let i = 0; i < imageCount; i++) {
         const res = await fetch('/api/generate', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: await apiHeaders(),
           body: JSON.stringify({
             prompt: finalPrompt,
             width: dimensions.width,
@@ -1326,6 +1628,24 @@ export default function App() {
     setSearchQuery('')
   }
 
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    setSession(null)
+    window.location.reload()
+  }
+
+  if (authEnabled && !authReady) {
+    return (
+      <div className="auth-screen">
+        <span className="spinner" />
+      </div>
+    )
+  }
+
+  if (authEnabled && !session) {
+    return <AuthScreen onAuthed={() => {}} />
+  }
+
   return (
     <div className="app">
       <Sidebar active={activeNav} onNavigate={handleNavigate} user={settings} onOpenSettings={() => setSettingsOpen(true)} onUpgrade={() => setPricingOpen(true)} />
@@ -1346,6 +1666,7 @@ export default function App() {
             showHero={activeNav === 'generate'}
             userName={settings.name}
             videoAutoplay={settings.autoplay}
+            onLogout={authEnabled ? handleLogout : undefined}
           />
 
           {activeNav === 'generate' && (
@@ -1634,7 +1955,7 @@ export default function App() {
                 <button className="ghost-btn" onClick={() => setViewer(null)}>Close</button>
                 <button
                   className="btn-primary sm"
-                  onClick={() => copyText(`${window.location.origin}${viewer.url}`, 'Image URL copied')}
+                  onClick={() => copyText(viewer.url.startsWith('http') ? viewer.url : `${window.location.origin}${viewer.url}`, 'Image URL copied')}
                 >
                   <Link2 size={14} /> Copy URL
                 </button>
@@ -1709,7 +2030,19 @@ export default function App() {
           settings={settings}
           onChange={setSettings}
           onClose={() => setSettingsOpen(false)}
-          onDone={() => setTimeout(() => window.location.reload(), 250)}
+          onDone={async () => {
+            const token = authEnabled ? await getAccessToken() : null
+            if (token) {
+              try {
+                await fetch('/api/profile', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                  body: JSON.stringify({ name: settings.name }),
+                })
+              } catch {}
+            }
+            setTimeout(() => window.location.reload(), 250)
+          }}
           theme={theme}
           onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
           onApplyDefaults={({ aspect: a, resolution: r, count: c } = {}) => {
