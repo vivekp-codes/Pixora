@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   WandSparkles,
   Brain,
-  Wand2,
-  Compass,
+  Binoculars,
+  Folder,
   Images,
   Heart,
-  History as HistoryIcon,
+  Clock,
   Settings,
   Bell,
   ChevronDown,
@@ -37,6 +37,7 @@ import {
   Crown,
   ArrowLeft,
   LogOut,
+  LogIn,
   Mail,
   Lock,
   Eye,
@@ -137,17 +138,17 @@ function Avatar({ name, size = 'md' }) {
 
 function Sidebar({ active, onNavigate, user, onOpenSettings, onUpgrade }) {
   const items = [
-    { id: 'generate', label: 'Generate', icon: Wand2 },
-    { id: 'explore', label: 'Explore', icon: Compass },
-    { id: 'creations', label: 'Creations', icon: Images },
+    { id: 'generate', label: 'Generate', icon: Brain },
+    { id: 'explore', label: 'Explore', icon: Binoculars },
+    { id: 'creations', label: 'Creations', icon: Folder },
     { id: 'favorites', label: 'Favorites', icon: Heart },
-    { id: 'history', label: 'History', icon: HistoryIcon },
+    { id: 'history', label: 'History', icon: Clock },
   ]
 
   return (
     <aside className="sidebar">
       <div className="side-logo">
-        <img src="/pixora.png" alt="Pixora" className="logo-img" />
+        <img src="/Plogo.png" alt="Pixora" className="logo-img" />
         <span className="logo-word">Pixora</span>
       </div>
 
@@ -275,7 +276,7 @@ function NotificationsPanel({ items, onClearAll, onDelete, onItemClick }) {
   )
 }
 
-function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen, onToggleNotif, onClearAll, onDeleteNotif, onNotifItem, showHero, userName, videoAutoplay, onLogout }) {
+function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen, onToggleNotif, onClearAll, onDeleteNotif, onNotifItem, showHero, userName, videoAutoplay, onLogout, onLogin }) {
   const unread = notifications.filter((n) => !n.read).length
   const notifRef = useRef(null)
   const vidRef = useRef(null)
@@ -329,11 +330,19 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
         <button className="new-btn" onClick={onNew}>
           <Plus size={16} /> New
         </button>
-        <Avatar name={userName} />
-        {onLogout && (
-          <button className="icon-btn" title="Sign out" aria-label="Sign out" onClick={onLogout}>
-            <LogOut size={17} />
+        {onLogin ? (
+          <button className="login-btn" onClick={onLogin}>
+            <LogIn size={16} /> Login
           </button>
+        ) : (
+          <>
+            <Avatar name={userName} />
+            {onLogout && (
+              <button className="icon-btn" title="Sign out" aria-label="Sign out" onClick={onLogout}>
+                <LogOut size={17} />
+              </button>
+            )}
+          </>
         )}
       </div>
 
@@ -923,7 +932,26 @@ function NotFoundPage({ onBack }) {
   )
 }
 
-function AuthScreen({ onAuthed }) {
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+      <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z" />
+      <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z" />
+      <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0 1 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z" />
+      <path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 0 1-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z" />
+    </svg>
+  )
+}
+
+function AppleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 384 512" aria-hidden="true">
+      <path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
+    </svg>
+  )
+}
+
+function AuthModal({ onClose }) {
   const [mode, setMode] = useState('signin')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -931,7 +959,18 @@ function AuthScreen({ onAuthed }) {
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const [sent, setSent] = useState(false)
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+    }
+  }, [onClose])
 
   async function submit(event) {
     event.preventDefault()
@@ -969,14 +1008,17 @@ function AuthScreen({ onAuthed }) {
               })
             } catch {}
           }
-          onAuthed()
+          onClose()
         } else {
-          setSent(true)
+          setMode('signin')
+          setEmail('')
+          setPassword('')
+          setError('Account created! Check your inbox for a confirmation link, then sign in.')
         }
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
         if (signInError) throw signInError
-        onAuthed()
+        onClose()
       }
     } catch (err) {
       setError(err.message || 'Something went wrong.')
@@ -986,142 +1028,121 @@ function AuthScreen({ onAuthed }) {
   }
 
   return (
-    <div className="auth2">
-      <span className="auth2-orb o1" aria-hidden="true" />
-      <span className="auth2-orb o2" aria-hidden="true" />
-      <span className="auth2-grid" aria-hidden="true" />
+    <div className="auth-modal" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="auth-modal-card">
+        <button className="auth-modal-close" onClick={onClose} aria-label="Close">
+          <X size={18} />
+        </button>
 
-      <div className="auth2-card">
-        <div className="auth2-visual">
-          <div className="auth2-visual-inner">
-            <div className="auth2-brand">
-              <img src="/pixora.png" alt="Pixora" className="logo-img" />
-              <span className="logo-word">Pixora</span>
-            </div>
-
-            <div className="auth2-copy">
-              <span className="auth2-eyebrow">
-                <span className="auth2-live-dot" /> AI IMAGE STUDIO
-              </span>
-              <h1>Create something extraordinary.</h1>
-              <p>Type a prompt, pick a style, and Pixora renders a gallery-ready image in seconds.</p>
-            </div>
-
-            <ul className="auth2-features">
-              <li><Sparkles size={15} /> Text-to-image generation</li>
-              <li><Gem size={15} /> Studio-quality renders</li>
-              <li><Heart size={15} /> Private cloud gallery</li>
-            </ul>
+        <div className="auth-modal-visual">
+          <img src="/Images/logback.jpg" alt="" className="auth-modal-img" />
+          <div className="auth-modal-brand">
+            <img src="/Plogo.png" alt="Pixora" className="logo-img" />
+            <span className="logo-word">Pixora</span>
           </div>
-
-          <span className="auth2-core" aria-hidden="true" />
-          <span className="auth2-ring" aria-hidden="true" />
+          <div className="auth-modal-copy">
+            <h3>Turn ideas into stunning visuals.</h3>
+            <p>Join thousands of creators building with AI.</p>
+          </div>
         </div>
 
-        <div className="auth2-form">
-          <div className="auth2-form-inner">
-            <h2 className="auth2-title">
-              {sent ? 'Check your inbox' : mode === 'signin' ? 'Welcome back' : 'Create your account'}
-            </h2>
-            <p className="auth2-sub">
-              {sent
-                ? 'We sent a confirmation link to your email. Open it to activate your account, then sign in below.'
-                : mode === 'signin'
-                  ? 'Sign in to generate, save, and share your AI art.'
-                  : 'Join Pixora and start creating gallery-ready images.'}
-            </p>
-            <div className="auth2-divider" />
-
-            {sent ? (
-              <button className="auth2-cta" onClick={() => setSent(false)}>Back to sign in</button>
-            ) : (
-              <form className="auth2-body" onSubmit={submit}>
-                {mode === 'signup' && (
-                  <label className="auth2-field">
-                    <span className="auth2-label">Name</span>
-                    <input
-                      className="auth2-input"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Your name"
-                      autoComplete="name"
-                    />
-                  </label>
-                )}
-
-                <label className="auth2-field">
-                  <span className="auth2-label">Email</span>
-                  <div className="auth2-input-wrap">
-                    <Mail size={16} className="auth2-input-icon" />
-                    <input
-                      className="auth2-input"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      autoComplete="email"
-                    />
-                  </div>
-                </label>
-
-                <label className="auth2-field">
-                  <span className="auth2-label">Password</span>
-                  <div className="auth2-pw">
-                    <Lock size={16} className="auth2-input-icon" />
-                    <input
-                      className="auth2-input"
-                      type={showPw ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'}
-                      autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                    />
-                    <button
-                      type="button"
-                      className="auth2-eye"
-                      onClick={() => setShowPw((v) => !v)}
-                      aria-label={showPw ? 'Hide password' : 'Show password'}
-                    >
-                      {showPw ? <EyeOff size={17} /> : <Eye size={17} />}
-                    </button>
-                  </div>
-                </label>
-
-                {mode === 'signin' && (
-                  <div className="auth2-row">
-                    <button type="button" className="auth2-forgot" onClick={() => setError('Password reset is coming soon.')}>
-                      Forgot password?
-                    </button>
-                  </div>
-                )}
-
-                {error && <p className="auth2-error" role="alert">{error}</p>}
-
-                <button className="auth2-cta" type="submit" disabled={busy}>
-                  {busy ? (
-                    <span className="spinner" />
-                  ) : (
-                    <>
-                      <Sparkles size={16} />
-                      {mode === 'signin' ? 'Sign In' : 'Create account'}
-                    </>
-                  )}
-                </button>
-              </form>
-            )}
-
-            <p className="auth2-alt">
-              {mode === 'signin' ? (
-                <>Don&apos;t have an account?{' '}
-                  <button onClick={() => { setMode('signup'); setError('') }}>Create account</button>
-                </>
-              ) : (
-                <>Already have an account?{' '}
-                  <button onClick={() => { setMode('signin'); setError('') }}>Sign in</button>
-                </>
-              )}
+        <div className="auth-modal-form">
+          <div className="auth-modal-head">
+            <h2>{mode === 'signin' ? 'Welcome back' : 'Create your account'}</h2>
+            <p>
+              {mode === 'signin'
+                ? 'Sign in to generate, save, and share your AI art.'
+                : 'Join Pixora and start creating gallery-ready images.'}
             </p>
           </div>
+
+          <div className={`auth-modal-tabs${mode === 'signup' ? ' active-second' : ''}`}>
+            <button
+              className={`auth-modal-tab${mode === 'signin' ? ' active' : ''}`}
+              onClick={() => { setMode('signin'); setError('') }}
+            >
+              Sign in
+            </button>
+            <button
+              className={`auth-modal-tab${mode === 'signup' ? ' active' : ''}`}
+              onClick={() => { setMode('signup'); setError('') }}
+            >
+              Create account
+            </button>
+          </div>
+
+          <div className="auth-modal-social">
+            <button type="button" className="auth-modal-social-btn">
+              <GoogleIcon /> Google
+            </button>
+            <button type="button" className="auth-modal-social-btn">
+              <AppleIcon /> Apple
+            </button>
+          </div>
+          <div className="auth-modal-or"><span>or continue with email</span></div>
+
+          <form className="auth-modal-body" onSubmit={submit}>
+            {mode === 'signup' && (
+              <label className="auth-modal-field">
+                <span className="auth-modal-label">Name</span>
+                <input
+                  className="auth-modal-input"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name"
+                  autoComplete="name"
+                />
+              </label>
+            )}
+
+            <label className="auth-modal-field">
+              <span className="auth-modal-label">Email</span>
+              <div className="auth-modal-input-wrap">
+                <Mail size={16} className="auth-modal-input-icon" />
+                <input
+                  className="auth-modal-input"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                />
+              </div>
+            </label>
+
+            <label className="auth-modal-field">
+              <span className="auth-modal-label">Password</span>
+              <div className="auth-modal-input-wrap">
+                <Lock size={16} className="auth-modal-input-icon" />
+                <input
+                  className="auth-modal-input"
+                  type={showPw ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'}
+                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                />
+                <button
+                  type="button"
+                  className="auth-modal-eye"
+                  onClick={() => setShowPw((v) => !v)}
+                  aria-label={showPw ? 'Hide password' : 'Show password'}
+                >
+                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+            </label>
+
+            {error && <p className="auth-modal-error" role="alert">{error}</p>}
+
+            <button className="auth-modal-cta" type="submit" disabled={busy}>
+              {busy ? (
+                <span className="spinner" />
+              ) : (
+                mode === 'signin' ? 'Sign In' : 'Create account'
+              )}
+            </button>
+          </form>
         </div>
       </div>
     </div>
@@ -1170,6 +1191,7 @@ export default function App() {
   const [favorites, setFavorites] = useState(new Set())
   const [session, setSession] = useState(null)
   const [authReady, setAuthReady] = useState(false)
+  const [authOpen, setAuthOpen] = useState(false)
 
   const [notifications, setNotifications] = useState(() => {
     try {
@@ -1564,6 +1586,12 @@ export default function App() {
       return
     }
 
+    if (authEnabled && !session) {
+      setAuthOpen(true)
+      setError('Please sign in to generate images.')
+      return
+    }
+
     const finalPrompt = trimmed
 
     setIsGenerating(true)
@@ -1642,10 +1670,6 @@ export default function App() {
     )
   }
 
-  if (authEnabled && !session) {
-    return <AuthScreen onAuthed={() => {}} />
-  }
-
   return (
     <div className="app">
       <Sidebar active={activeNav} onNavigate={handleNavigate} user={settings} onOpenSettings={() => setSettingsOpen(true)} onUpgrade={() => setPricingOpen(true)} />
@@ -1666,7 +1690,8 @@ export default function App() {
             showHero={activeNav === 'generate'}
             userName={settings.name}
             videoAutoplay={settings.autoplay}
-            onLogout={authEnabled ? handleLogout : undefined}
+            onLogout={authEnabled && session ? handleLogout : undefined}
+            onLogin={authEnabled && !session ? () => setAuthOpen(true) : undefined}
           />
 
           {activeNav === 'generate' && (
@@ -2024,6 +2049,8 @@ export default function App() {
       )}
 
       {notFound && <NotFoundPage onBack={() => setNotFound(null)} />}
+
+      {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
 
       {settingsOpen && (
         <SettingsModal
