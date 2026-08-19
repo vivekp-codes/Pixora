@@ -280,7 +280,9 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
   const unread = notifications.filter((n) => !n.read).length
   const notifRef = useRef(null)
   const vidRef = useRef(null)
+  const logoutRef = useRef(null)
   const [vidSeam, setVidSeam] = useState(false)
+  const [logoutOpen, setLogoutOpen] = useState(false)
 
   useEffect(() => {
     if (!notifOpen) return
@@ -290,6 +292,15 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
   }, [notifOpen, onToggleNotif])
+
+  useEffect(() => {
+    if (!logoutOpen) return
+    function handleClick(e) {
+      if (logoutRef.current && !logoutRef.current.contains(e.target)) setLogoutOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [logoutOpen])
 
   function handleVideoTime() {
     const v = vidRef.current
@@ -338,9 +349,28 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
           <>
             <Avatar name={userName} />
             {onLogout && (
-              <button className="icon-btn" title="Sign out" aria-label="Sign out" onClick={onLogout}>
-                <LogOut size={17} />
-              </button>
+              <div className="logout-wrap" ref={logoutRef}>
+                <button
+                  className={`icon-btn logout-btn${logoutOpen ? ' active' : ''}`}
+                  title="Sign out"
+                  aria-label="Sign out"
+                  onClick={() => setLogoutOpen((v) => !v)}
+                >
+                  <LogOut size={17} />
+                </button>
+                {logoutOpen && (
+                  <div className="logout-pop">
+                    <p className="logout-pop-title">Log out?</p>
+                    <p className="logout-pop-text">You'll need to sign in again to generate, save, and sync your images.</p>
+                    <div className="logout-pop-actions">
+                      <button className="ghost-btn" onClick={() => setLogoutOpen(false)}>Cancel</button>
+                      <button className="btn-danger" onClick={() => { setLogoutOpen(false); onLogout() }}>
+                        <LogOut size={15} /> Log out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </>
         )}
@@ -959,6 +989,7 @@ function AuthModal({ onClose }) {
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [success, setSuccess] = useState(false)
 
   useEffect(() => {
     function onKey(e) {
@@ -989,6 +1020,7 @@ function AuthModal({ onClose }) {
     }
 
     setBusy(true)
+    const startedAt = Date.now()
     try {
       if (mode === 'signup') {
         const { data, error: signUpError } = await supabase.auth.signUp({
@@ -1008,21 +1040,27 @@ function AuthModal({ onClose }) {
               })
             } catch {}
           }
-          onClose()
         } else {
           setMode('signin')
           setEmail('')
           setPassword('')
           setError('Account created! Check your inbox for a confirmation link, then sign in.')
+          setBusy(false)
+          return
         }
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
         if (signInError) throw signInError
-        onClose()
       }
+
+      const remaining = Math.max(0, 3000 - (Date.now() - startedAt))
+      setTimeout(() => {
+        setBusy(false)
+        setSuccess(true)
+        setTimeout(() => onClose(), 1300)
+      }, remaining)
     } catch (err) {
       setError(err.message || 'Something went wrong.')
-    } finally {
       setBusy(false)
     }
   }
@@ -1135,15 +1173,30 @@ function AuthModal({ onClose }) {
 
             {error && <p className="auth-modal-error" role="alert">{error}</p>}
 
-            <button className="auth-modal-cta" type="submit" disabled={busy}>
+            <button
+              className={`auth-modal-cta${busy ? ' busy' : ''}`}
+              type="submit"
+              disabled={busy || success}
+            >
               {busy ? (
-                <span className="spinner" />
+                <span className="auth-modal-spin" />
               ) : (
                 mode === 'signin' ? 'Sign In' : 'Create account'
               )}
             </button>
           </form>
         </div>
+
+        {success && (
+          <div className="auth-modal-success">
+            <div className="auth-modal-success-badge">
+              <svg viewBox="0 0 24 24" className="auth-modal-check-svg" aria-hidden="true">
+                <path d="M4.5 12.5l5 5 10-11" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <p className="auth-modal-success-text">Welcome to Pixora!</p>
+          </div>
+        )}
       </div>
     </div>
   )
