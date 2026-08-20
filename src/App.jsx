@@ -4,7 +4,6 @@ import {
   Brain,
   Binoculars,
   Folder,
-  Images,
   Heart,
   Clock,
   Settings,
@@ -39,6 +38,7 @@ import {
   LogOut,
   LogIn,
   Mail,
+  User,
   Lock,
   Eye,
   EyeOff,
@@ -201,6 +201,36 @@ function Sidebar({ active, onNavigate, user, onOpenSettings, onUpgrade }) {
   )
 }
 
+function BottomNav({ active, onNavigate }) {
+  const items = [
+    { id: 'generate', label: 'Generate', icon: Brain },
+    { id: 'explore', label: 'Explore', icon: Binoculars },
+    { id: 'creations', label: 'Creations', icon: Folder },
+    { id: 'favorites', label: 'Favorites', icon: Heart },
+    { id: 'history', label: 'History', icon: Clock },
+  ]
+
+  return (
+    <nav className="bottom-nav" aria-label="Primary navigation">
+      {items.map((item) => {
+        const Icon = item.icon
+        const isActive = active === item.id
+        return (
+          <button
+            key={item.id}
+            className={`bottom-nav-item${isActive ? ' active' : ''}`}
+            onClick={() => onNavigate(item.id)}
+            aria-current={isActive ? 'page' : undefined}
+          >
+            <span className="bottom-nav-ico"><Icon size={19} strokeWidth={1.9} /></span>
+            <span className="bottom-nav-label">{item.label}</span>
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
 const TYPE_ICON = {
   generated: WandSparkles,
   regenerated: RefreshCw,
@@ -276,7 +306,7 @@ function NotificationsPanel({ items, onClearAll, onDelete, onItemClick }) {
   )
 }
 
-function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen, onToggleNotif, onClearAll, onDeleteNotif, onNotifItem, showHero, userName, videoAutoplay, onLogout, onLogin }) {
+function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen, onToggleNotif, onClearAll, onDeleteNotif, onNotifItem, showHero, userName, videoAutoplay, onLogout, onLogin, onOpenSettings }) {
   const unread = notifications.filter((n) => !n.read).length
   const notifRef = useRef(null)
   const vidRef = useRef(null)
@@ -320,6 +350,11 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
         <button className="icon-btn theme-btn" onClick={onToggleTheme} aria-label="Toggle theme" title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
         </button>
+        {onOpenSettings && (
+          <button className="icon-btn settings-btn" onClick={onOpenSettings} aria-label="Settings" title="Settings">
+            <Settings size={18} />
+          </button>
+        )}
         <div className="notif-wrap" ref={notifRef}>
           <button
             className={`icon-btn${notifOpen ? ' active' : ''}`}
@@ -571,14 +606,52 @@ function SectionHead({ title, count, searchOpen, searchQuery, onSearchToggle, on
   )
 }
 
-function GalleryGrid({ entries, favorites, onToggleFavorite, onEdit, onDelete, onView, onAction, emptyTitle, emptySub }) {
+function EmptyVisual() {
+  const IMGS = [
+    '/Images/empty-set/emp1.jpg',
+    '/Images/empty-set/emp2.jpg',
+    '/Images/empty-set/emp3.jpg',
+    '/Images/empty-set/emp4.jpg',
+    '/Images/empty-set/emp5.jpg',
+  ]
+
+  const POS = [
+    { left: '2%', top: 16, rot: -14, z: 1 },
+    { left: '18%', top: 8, rot: -7, z: 2 },
+    { left: '35%', top: 0, rot: 0, z: 5 },
+    { left: '52%', top: 8, rot: 7, z: 2 },
+    { left: '69%', top: 16, rot: 14, z: 1 },
+  ]
+
+  return (
+    <div className="empty-visual" aria-hidden="true">
+      {IMGS.map((src, i) => (
+        <div
+          key={src}
+          className={`ev-card${i === 2 ? ' ev-front' : ''}`}
+          style={{
+            left: POS[i].left,
+            top: POS[i].top,
+            zIndex: POS[i].z,
+            '--rot': `${POS[i].rot}deg`,
+            transitionDelay: `${Math.abs(i - 2) * 0.06}s`,
+          }}
+        >
+          <img src={src} alt="" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function GalleryGrid({ entries, favorites, onToggleFavorite, onEdit, onDelete, onView, onAction, emptyTitle, emptySub, withVisual = true }) {
   const [showMore, setShowMore] = useState(false)
   useEffect(() => setShowMore(false), [entries])
 
   if (entries.length === 0) {
     return (
       <div className="empty">
-        <span className="empty-icon"><Images size={22} /></span>
+        {withVisual && <EmptyVisual />}
         <p className="empty-title">{emptyTitle}</p>
         <p className="empty-sub">{emptySub}</p>
       </div>
@@ -983,9 +1056,11 @@ function AppleIcon() {
 
 function AuthModal({ onClose }) {
   const [mode, setMode] = useState('signin')
+  const [step, setStep] = useState(1)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -1003,10 +1078,10 @@ function AuthModal({ onClose }) {
     }
   }, [onClose])
 
-  async function submit(event) {
+  function goToStep2(event) {
     event.preventDefault()
     setError('')
-    if (mode === 'signup' && name.trim().length < 2) {
+    if (name.trim().length < 2) {
       setError('Please enter your name.')
       return
     }
@@ -1014,7 +1089,27 @@ function AuthModal({ onClose }) {
       setError('Enter a valid email address.')
       return
     }
-    if (password.length < 6) {
+    setStep(2)
+  }
+
+  async function submit(event) {
+    event.preventDefault()
+    setError('')
+    if (mode === 'signup') {
+      if (password.length < 6) {
+        setError('Password must be at least 6 characters.')
+        return
+      }
+      if (password !== confirmPassword) {
+        setError('Passwords do not match.')
+        return
+      }
+    }
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      setError('Enter a valid email address.')
+      return
+    }
+    if (mode === 'signin' && password.length < 6) {
       setError('Password must be at least 6 characters.')
       return
     }
@@ -1042,6 +1137,7 @@ function AuthModal({ onClose }) {
           }
         } else {
           setMode('signin')
+          setStep(1)
           setEmail('')
           setPassword('')
           setError('Account created! Check your inbox for a confirmation link, then sign in.')
@@ -1097,17 +1193,25 @@ function AuthModal({ onClose }) {
           <div className={`auth-modal-tabs${mode === 'signup' ? ' active-second' : ''}`}>
             <button
               className={`auth-modal-tab${mode === 'signin' ? ' active' : ''}`}
-              onClick={() => { setMode('signin'); setError('') }}
+              onClick={() => { setMode('signin'); setStep(1); setError('') }}
             >
               Sign in
             </button>
             <button
               className={`auth-modal-tab${mode === 'signup' ? ' active' : ''}`}
-              onClick={() => { setMode('signup'); setError('') }}
+              onClick={() => { setMode('signup'); setStep(1); setError('') }}
             >
               Create account
             </button>
           </div>
+
+          {mode === 'signup' && (
+            <div className="auth-modal-steps">
+              <span className="auth-modal-step-label">Step {step} of 2</span>
+              <span className={`step-dot${step === 1 ? ' active' : ''}`} />
+              <span className={`step-dot${step === 2 ? ' active' : ''}`} />
+            </div>
+          )}
 
           <div className="auth-modal-social">
             <button type="button" className="auth-modal-social-btn">
@@ -1119,59 +1223,131 @@ function AuthModal({ onClose }) {
           </div>
           <div className="auth-modal-or"><span>or continue with email</span></div>
 
-          <form className="auth-modal-body" onSubmit={submit}>
-            {mode === 'signup' && (
-              <label className="auth-modal-field">
-                <span className="auth-modal-label">Name</span>
-                <input
-                  className="auth-modal-input"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
-                  autoComplete="name"
-                />
-              </label>
+          <form className="auth-modal-body" onSubmit={mode === 'signup' && step === 1 ? goToStep2 : submit}>
+            {mode === 'signup' && step === 1 && (
+              <>
+                <label className="auth-modal-field">
+                  <span className="auth-modal-label">Username</span>
+                  <div className="auth-modal-input-wrap">
+                    <User size={16} className="auth-modal-input-icon" />
+                    <input
+                      className="auth-modal-input"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Your name"
+                      autoComplete="name"
+                    />
+                  </div>
+                </label>
+
+                <label className="auth-modal-field">
+                  <span className="auth-modal-label">Email</span>
+                  <div className="auth-modal-input-wrap">
+                    <Mail size={16} className="auth-modal-input-icon" />
+                    <input
+                      className="auth-modal-input"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                    />
+                  </div>
+                </label>
+              </>
             )}
 
-            <label className="auth-modal-field">
-              <span className="auth-modal-label">Email</span>
-              <div className="auth-modal-input-wrap">
-                <Mail size={16} className="auth-modal-input-icon" />
-                <input
-                  className="auth-modal-input"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  autoComplete="email"
-                />
-              </div>
-            </label>
+            {mode === 'signup' && step === 2 && (
+              <>
+                <label className="auth-modal-field">
+                  <span className="auth-modal-label">Password</span>
+                  <div className="auth-modal-input-wrap">
+                    <Lock size={16} className="auth-modal-input-icon" />
+                    <input
+                      className="auth-modal-input"
+                      type={showPw ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="At least 6 characters"
+                      autoComplete="new-password"
+                    />
+                    <button
+                      type="button"
+                      className="auth-modal-eye"
+                      onClick={() => setShowPw((v) => !v)}
+                      aria-label={showPw ? 'Hide password' : 'Show password'}
+                    >
+                      {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </label>
 
-            <label className="auth-modal-field">
-              <span className="auth-modal-label">Password</span>
-              <div className="auth-modal-input-wrap">
-                <Lock size={16} className="auth-modal-input-icon" />
-                <input
-                  className="auth-modal-input"
-                  type={showPw ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={mode === 'signup' ? 'At least 6 characters' : 'Your password'}
-                  autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-                />
-                <button
-                  type="button"
-                  className="auth-modal-eye"
-                  onClick={() => setShowPw((v) => !v)}
-                  aria-label={showPw ? 'Hide password' : 'Show password'}
-                >
-                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-            </label>
+                <label className="auth-modal-field">
+                  <span className="auth-modal-label">Confirm password</span>
+                  <div className="auth-modal-input-wrap">
+                    <Lock size={16} className="auth-modal-input-icon" />
+                    <input
+                      className="auth-modal-input"
+                      type={showPw ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Repeat your password"
+                      autoComplete="new-password"
+                    />
+                  </div>
+                </label>
+              </>
+            )}
+
+            {mode === 'signin' && (
+              <>
+                <label className="auth-modal-field">
+                  <span className="auth-modal-label">Email</span>
+                  <div className="auth-modal-input-wrap">
+                    <Mail size={16} className="auth-modal-input-icon" />
+                    <input
+                      className="auth-modal-input"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                    />
+                  </div>
+                </label>
+
+                <label className="auth-modal-field">
+                  <span className="auth-modal-label">Password</span>
+                  <div className="auth-modal-input-wrap">
+                    <Lock size={16} className="auth-modal-input-icon" />
+                    <input
+                      className="auth-modal-input"
+                      type={showPw ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Your password"
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      className="auth-modal-eye"
+                      onClick={() => setShowPw((v) => !v)}
+                      aria-label={showPw ? 'Hide password' : 'Show password'}
+                    >
+                      {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </label>
+              </>
+            )}
 
             {error && <p className="auth-modal-error" role="alert">{error}</p>}
+
+            {mode === 'signup' && step === 2 && (
+              <button type="button" className="auth-modal-back" onClick={() => { setStep(1); setError('') }}>
+                <ArrowLeft size={14} /> Back
+              </button>
+            )}
 
             <button
               className={`auth-modal-cta${busy ? ' busy' : ''}`}
@@ -1180,6 +1356,8 @@ function AuthModal({ onClose }) {
             >
               {busy ? (
                 <span className="auth-modal-spin" />
+              ) : mode === 'signup' && step === 1 ? (
+                'Continue'
               ) : (
                 mode === 'signin' ? 'Sign In' : 'Create account'
               )}
@@ -1582,6 +1760,11 @@ export default function App() {
   async function loadHistory() {
     try {
       const res = await fetch('/api/history', { headers: await apiHeaders() })
+      if (res.status === 401) {
+        await supabase.auth.signOut()
+        setSession(null)
+        return
+      }
       const history = await res.json()
       if (Array.isArray(history)) {
         setPrints(history)
@@ -1605,6 +1788,11 @@ export default function App() {
       if (!token) return
       try {
         const res = await fetch('/api/profile', { headers: { Authorization: `Bearer ${token}` } })
+        if (res.status === 401) {
+          await supabase.auth.signOut()
+          setSession(null)
+          return
+        }
         const data = await res.json()
         if (data.name) {
           setSettings((prev) => ({ ...prev, name: data.name, email: session.user.email }))
@@ -1700,8 +1888,14 @@ export default function App() {
   const creations = filterSearch(prints.filter((p) => !p._pending))
   const favs = filterSearch(prints.filter((p) => !p._pending && favorites.has(p.id)))
   const historyEntries = prints.filter((p) => !p._pending)
+  const filteredHistory = filterSearch(historyEntries)
 
   const recent = prints.filter((p) => !p._pending).slice(0, 8)
+
+  const displayUser = {
+    name: authEnabled && session ? settings.name || 'Guest' : 'Guest',
+    email: authEnabled && session ? settings.email || 'Guest@pixora.com' : 'Guest@pixora.com',
+  }
 
   function handleNavigate(id) {
     setActiveNav(id)
@@ -1725,7 +1919,7 @@ export default function App() {
 
   return (
     <div className="app">
-      <Sidebar active={activeNav} onNavigate={handleNavigate} user={settings} onOpenSettings={() => setSettingsOpen(true)} onUpgrade={() => setPricingOpen(true)} />
+      <Sidebar active={activeNav} onNavigate={handleNavigate} user={displayUser} onOpenSettings={() => setSettingsOpen(true)} onUpgrade={() => setPricingOpen(true)} />
 
       <main className="main">
         <div className="main-body">
@@ -1741,10 +1935,11 @@ export default function App() {
             onDeleteNotif={handleDeleteNotif}
             onNotifItem={handleNotifItem}
             showHero={activeNav === 'generate'}
-            userName={settings.name}
+            userName={displayUser.name}
             videoAutoplay={settings.autoplay}
             onLogout={authEnabled && session ? handleLogout : undefined}
             onLogin={authEnabled && !session ? () => setAuthOpen(true) : undefined}
+            onOpenSettings={() => setSettingsOpen(true)}
           />
 
           {activeNav === 'generate' && (
@@ -1854,6 +2049,7 @@ export default function App() {
                         ? `No image prompt contains “${searchQuery.trim()}”.`
                         : 'Write a prompt above and generate your first image.'
                     }
+                    withVisual={!searchTerm}
                   />
                 )}
               </section>
@@ -1937,6 +2133,7 @@ export default function App() {
                     ? `No image prompt contains “${searchQuery.trim()}”.`
                     : 'Generate an image and it will appear here.'
                 }
+                withVisual={!searchTerm}
               />
             </section>
           )}
@@ -1969,24 +2166,38 @@ export default function App() {
                     ? `No favorite prompt contains “${searchQuery.trim()}”.`
                     : 'Tap the heart on any image to save it here.'
                 }
+                withVisual={!searchTerm}
               />
             </section>
           )}
 
           {activeNav === 'history' && (
             <section className="results">
-              <div className="section-head">
-                <h2>History — {imagesLabel(historyEntries.length)}</h2>
-              </div>
-              {historyEntries.length === 0 ? (
+              <SectionHead
+                title="History"
+                count={filteredHistory.length}
+                searchOpen={searchOpen}
+                searchQuery={searchQuery}
+                onSearchToggle={() => setSearchOpen(true)}
+                onSearchChange={setSearchQuery}
+                onSearchClose={() => {
+                  setSearchOpen(false)
+                  setSearchQuery('')
+                }}
+              />
+              {filteredHistory.length === 0 ? (
                 <div className="empty">
-                  <span className="empty-icon"><HistoryIcon size={22} /></span>
-                  <p className="empty-title">No history yet</p>
-                  <p className="empty-sub">Your past generations will be listed here.</p>
+                  {!searchTerm && <EmptyVisual />}
+                  <p className="empty-title">{searchTerm ? 'No matches found' : 'No history yet'}</p>
+                  <p className="empty-sub">
+                    {searchTerm
+                      ? `No image prompt contains “${searchQuery.trim()}”.`
+                      : 'Your past generations will be listed here.'}
+                  </p>
                 </div>
               ) : (
                 <div className="history-list">
-                  {historyEntries.map((entry) => (
+                  {filteredHistory.map((entry) => (
                     <HistoryRow
                       key={entry.id}
                       entry={entry}
@@ -2102,6 +2313,8 @@ export default function App() {
       )}
 
       {notFound && <NotFoundPage onBack={() => setNotFound(null)} />}
+
+      <BottomNav active={activeNav} onNavigate={handleNavigate} />
 
       {authOpen && <AuthModal onClose={() => setAuthOpen(false)} />}
 
