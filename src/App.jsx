@@ -249,10 +249,10 @@ function timeAgo(iso) {
   return d === 1 ? 'yesterday' : `${d}d ago`
 }
 
-function NotificationsPanel({ items, onClearAll, onDelete, onItemClick }) {
+function NotificationsPanel({ items, onClearAll, onDelete, onItemClick, style }) {
   const unread = items.filter((n) => !n.read).length
   return (
-    <div className="notif-panel">
+    <div className="notif-panel" style={style}>
       <div className="notif-head">
         <span className="notif-title">Notifications</span>
         {unread > 0 && <span className="notif-unread-count">{unread} new</span>}
@@ -313,6 +313,14 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
   const logoutRef = useRef(null)
   const [vidSeam, setVidSeam] = useState(false)
   const [logoutOpen, setLogoutOpen] = useState(false)
+  const [popX, setPopX] = useState(null)
+
+  function anchorFromEvent(e) {
+    if (typeof window === 'undefined' || window.innerWidth > 860) return null
+    const r = e.currentTarget.getBoundingClientRect()
+    const half = 175
+    return Math.min(Math.max(r.left + r.width / 2, half), window.innerWidth - half)
+  }
 
   useEffect(() => {
     if (!notifOpen) return
@@ -359,18 +367,26 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
           <button
             className={`icon-btn${notifOpen ? ' active' : ''}`}
             aria-label="Notifications"
-            onClick={() => onToggleNotif(!notifOpen)}
+            onClick={(e) => {
+              const open = !notifOpen
+              if (open) setPopX(anchorFromEvent(e))
+              onToggleNotif(open)
+            }}
           >
             <Bell size={18} />
             {unread > 0 && <span className="notif-badge">{unread}</span>}
           </button>
           {notifOpen && (
-            <NotificationsPanel
-              items={notifications}
-              onClearAll={onClearAll}
-              onDelete={onDeleteNotif}
-              onItemClick={onNotifItem}
-            />
+            <>
+              <div className="pop-overlay" onClick={() => onToggleNotif(false)} />
+              <NotificationsPanel
+                style={popX != null ? { left: `${popX}px` } : undefined}
+                items={notifications}
+                onClearAll={onClearAll}
+                onDelete={onDeleteNotif}
+                onItemClick={onNotifItem}
+              />
+            </>
           )}
         </div>
         <button className="new-btn" onClick={onNew}>
@@ -389,21 +405,28 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
                   className={`icon-btn logout-btn${logoutOpen ? ' active' : ''}`}
                   title="Sign out"
                   aria-label="Sign out"
-                  onClick={() => setLogoutOpen((v) => !v)}
+                  onClick={(e) => {
+                    const open = !logoutOpen
+                    if (open) setPopX(anchorFromEvent(e))
+                    setLogoutOpen(open)
+                  }}
                 >
                   <LogOut size={17} />
                 </button>
                 {logoutOpen && (
-                  <div className="logout-pop">
-                    <p className="logout-pop-title">Log out?</p>
-                    <p className="logout-pop-text">You'll need to sign in again to generate, save, and sync your images.</p>
-                    <div className="logout-pop-actions">
-                      <button className="ghost-btn" onClick={() => setLogoutOpen(false)}>Cancel</button>
-                      <button className="btn-danger" onClick={() => { setLogoutOpen(false); onLogout() }}>
-                        <LogOut size={15} /> Log out
-                      </button>
+                  <>
+                    <div className="pop-overlay" onClick={() => setLogoutOpen(false)} />
+                    <div className="logout-pop" style={popX != null ? { left: `${popX}px` } : undefined}>
+                      <p className="logout-pop-title">Log out?</p>
+                      <p className="logout-pop-text">You'll need to sign in again to generate, save, and sync your images.</p>
+                      <div className="logout-pop-actions">
+                        <button className="ghost-btn" onClick={() => setLogoutOpen(false)}>Cancel</button>
+                        <button className="btn-danger" onClick={() => { setLogoutOpen(false); onLogout() }}>
+                          <LogOut size={15} /> Log out
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
             )}
@@ -472,6 +495,11 @@ function PrintCard({ entry, index, isFavorite, onToggleFavorite, onEdit, onDelet
   const time = new Date(entry.createdAt).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
+  })
+  const dateLabel = new Date(entry.createdAt).toLocaleDateString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   })
   const delay = Math.min(index * 70, 420)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -549,11 +577,32 @@ function PrintCard({ entry, index, isFavorite, onToggleFavorite, onEdit, onDelet
         </div>
       </div>
       <div className="result-body">
+        <p className="result-caption">{dateLabel} · {time}</p>
         <p className="result-prompt">{entry.prompt}</p>
-        <div className="result-meta">
-          <span className="chip">{entry.width}×{entry.height}</span>
-          <span className="chip">Pixora 2.0</span>
-          <span className="result-time">{time}</span>
+        <button
+          className={`card-fav-btn${isFavorite ? ' fav-on' : ''}`}
+          title={isFavorite ? 'Remove favorite' : 'Add to favorites'}
+          aria-label={isFavorite ? 'Remove favorite' : 'Add to favorites'}
+          onClick={() => onToggleFavorite(entry)}
+        >
+          <Heart size={16} fill={isFavorite ? 'currentColor' : 'none'} />
+        </button>
+        <div className="result-foot">
+          <span className="foot-stat">
+            <small>Size</small>
+            <strong>
+              <span className="size-px">{entry.width} × {entry.height} · </span>
+              {formatRatio(entry.width, entry.height)}
+            </strong>
+          </span>
+          <span className="foot-stat">
+            <small>Engine</small>
+            <strong>Pixora</strong>
+          </span>
+          <span className="foot-stat foot-end">
+            <small>Format</small>
+            <strong>JPG · HD</strong>
+          </span>
         </div>
       </div>
     </article>
@@ -569,8 +618,14 @@ function PendingCard({ entry }) {
         </span>
       </div>
       <div className="result-body">
+        <div className="skel-line skel-caption" />
         <div className="skel-line w90" />
         <div className="skel-line w60" />
+      </div>
+      <div className="result-foot pending-foot">
+        <div className="skel-cell" />
+        <div className="skel-cell" />
+        <div className="skel-cell" />
       </div>
     </article>
   )
@@ -2357,4 +2412,22 @@ export default function App() {
 
 function imagesLabel(count) {
   return count === 1 ? '1 image' : `${count} images`
+}
+
+function formatRatio(width, height) {
+  const gcd = (a, b) => (b === 0 ? a : gcd(b, a % b))
+  const d = gcd(width, height)
+  const rw = Math.round(width / d)
+  const rh = Math.round(height / d)
+  if (rw > 32 || rh > 32) {
+    const r = width / height
+    if (Math.abs(r - 16 / 9) < 0.02) return '16:9'
+    if (Math.abs(r - 9 / 16) < 0.02) return '9:16'
+    if (Math.abs(r - 4 / 3) < 0.02) return '4:3'
+    if (Math.abs(r - 3 / 4) < 0.02) return '3:4'
+    if (Math.abs(r - 3 / 2) < 0.02) return '3:2'
+    if (Math.abs(r - 2 / 3) < 0.02) return '2:3'
+    return `${r.toFixed(2)}:1`
+  }
+  return `${rw}:${rh}`
 }
