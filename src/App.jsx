@@ -45,6 +45,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { supabase, authEnabled, getAccessToken } from './supabaseClient'
+import CinematicIntro from './CinematicIntro'
 
 const ASPECTS = [
   { id: '1:1', w: 1, h: 1, label: '1:1' },
@@ -1445,18 +1446,18 @@ function AuthModal({ onClose }) {
               )}
             </button>
           </form>
-        </div>
 
-        {success && (
-          <div className="auth-modal-success">
-            <div className="auth-modal-success-badge">
-              <svg viewBox="0 0 24 24" className="auth-modal-check-svg" aria-hidden="true">
-                <path d="M4.5 12.5l5 5 10-11" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
+          {success && (
+            <div className="auth-modal-success">
+              <div className="auth-modal-success-badge">
+                <svg viewBox="0 0 24 24" className="auth-modal-check-svg" aria-hidden="true">
+                  <path d="M4.5 12.5l5 5 10-11" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </div>
+              <p className="auth-modal-success-text">Welcome to Pixora!</p>
             </div>
-            <p className="auth-modal-success-text">Welcome to Pixora!</p>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
@@ -1466,6 +1467,13 @@ export default function App() {
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('pixora-theme')
     return saved === 'light' ? 'light' : 'dark'
+  })
+  const [showIntro, setShowIntro] = useState(() => {
+    try {
+      return !localStorage.getItem('pixora-intro-seen')
+    } catch {
+      return false
+    }
   })
   const [activeNav, setActiveNav] = useState('generate')
   const [settings, setSettings] = useState(() => {
@@ -1847,6 +1855,7 @@ export default function App() {
         setSession(null)
         return
       }
+      if (!res.ok) throw new Error(`Failed to load history (${res.status})`)
       const history = await res.json()
       if (Array.isArray(history)) {
         setPrints(history)
@@ -1875,6 +1884,7 @@ export default function App() {
           setSession(null)
           return
         }
+        if (!res.ok) throw new Error(`Failed to load profile (${res.status})`)
         const data = await res.json()
         if (data.name) {
           setSettings((prev) => ({ ...prev, name: data.name, email: session.user.email }))
@@ -2000,7 +2010,12 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <>
+      {showIntro && <CinematicIntro onFinish={() => {
+        try { localStorage.setItem('pixora-intro-seen', '1') } catch {}
+        setShowIntro(false)
+      }} />}
+      <div className="app">
       <Sidebar active={activeNav} onNavigate={handleNavigate} user={displayUser} onOpenSettings={() => setSettingsOpen(true)} onUpgrade={() => setPricingOpen(true)} />
 
       <main className="main">
@@ -2435,6 +2450,7 @@ export default function App() {
         />
       )}
     </div>
+    </>
   )
 }
 
