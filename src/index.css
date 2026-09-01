@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --bg: #0b0b0f;
   --bg-soft: #131319;
   --bg-gradient: linear-gradient(150deg, #1a1229 0%, #0d0b12 38%, #0b0b0f 100%);
@@ -2025,8 +2025,8 @@ button {
 
 .card-fav-btn {
   position: absolute;
-  top: 27px;
-  right: 0;
+  top: 16px;
+  right: 4px;
   display: grid;
   place-items: center;
   width: 31px;
@@ -2828,6 +2828,19 @@ button {
   box-shadow: 0 0 0 3px rgba(103, 44, 209, 0.14);
 }
 
+.setting-field input[readonly] {
+  color: rgba(222, 216, 255, 0.5);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: not-allowed;
+  border-style: dashed;
+  border-color: rgba(155, 92, 255, 0.3);
+}
+
+.setting-field input[readonly]:focus {
+  border-color: rgba(155, 92, 255, 0.3);
+  box-shadow: none;
+}
+
 .settings-row {
   display: flex;
   align-items: center;
@@ -3492,7 +3505,8 @@ button {
   }
 
   .card-fav-btn {
-    top: 19px;
+    top: 10px;
+    right: 3px;
     width: 24px;
     height: 24px;
     border-radius: 8px;
@@ -4733,158 +4747,90 @@ button {
   }
 }
 
-/* ---------- cinematic intro ---------- */
+/* ---------- logout spinner loader (transparent + blur) ---------- */
 
-.cinematic-intro {
+.logout-fx {
   position: fixed;
   inset: 0;
-  z-index: 1000;
-  background: #05040c;
-  overflow: hidden;
-  cursor: pointer;
-  animation: intro-fade 0.6s ease both;
-  transition: opacity 0.7s ease, visibility 0.7s ease;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 4, 12, 0.45);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: login-fade-in 0.2s ease both;
 }
 
-.cinematic-intro.fading {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-}
-
-.cinematic-intro canvas {
-  display: block;
-  width: 100% !important;
-  height: 100% !important;
-}
-
-.cinematic-overlay {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse at 50% 45%, rgba(124, 60, 255, 0.12), transparent 55%),
-    radial-gradient(ellipse at 20% 80%, rgba(34, 197, 94, 0.08), transparent 45%),
-    linear-gradient(180deg, transparent 55%, rgba(5, 4, 12, 0.9));
-  pointer-events: none;
-}
-
-.cinematic-content {
-  position: absolute;
-  inset: 0;
+.logout-fx-center {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  text-align: center;
-  pointer-events: none;
+  gap: 18px;
 }
 
-.intro-logo {
+.logout-spinner {
+  position: relative;
   width: 74px;
   height: 74px;
-  border-radius: 20px;
-  padding: 8px;
-  background: linear-gradient(135deg, rgba(155, 92, 255, 0.25), rgba(91, 140, 255, 0.25));
-  border: 1px solid rgba(155, 92, 255, 0.5);
-  box-shadow: 0 0 60px rgba(155, 92, 255, 0.4), inset 0 0 30px rgba(155, 92, 255, 0.15);
-  animation: intro-logo-in 1.2s cubic-bezier(0.22, 1, 0.36, 1) both;
-  pointer-events: none;
 }
 
-.intro-logo-img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  border-radius: 14px;
-  filter: drop-shadow(0 0 12px rgba(155, 92, 255, 0.6));
+.logout-spinner-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 4px solid transparent;
+  border-top-color: #c084fc;
+  border-right-color: #7c3aed;
+  border-bottom-color: #4c1d95;
+  animation: logout-spin 0.9s linear infinite;
 }
 
-.intro-title {
-  margin: 22px 0 0;
+.logout-spinner-ring.mid {
+  inset: 9px;
+  border-width: 3px;
+  border-top-color: #a855f7;
+  border-right-color: transparent;
+  border-bottom-color: #6d28d9;
+  animation-duration: 1.3s;
+  animation-direction: reverse;
+}
+
+.logout-spinner-ring.dot {
+  inset: 20px;
+  border: none;
+  background: radial-gradient(circle, #fff 0%, #a855f7 100%);
+  box-shadow: 0 0 18px rgba(168, 85, 247, 0.9);
+  animation: logout-pulse 1.2s ease-in-out infinite;
+}
+
+.logout-fx-text {
   font-family: "Space Grotesk", sans-serif;
-  font-size: clamp(44px, 9vw, 96px);
-  font-weight: 800;
-  letter-spacing: 0.22em;
-  color: #fff;
-  text-shadow: 0 0 18px rgba(155, 92, 255, 0.55), 0 0 60px rgba(155, 92, 255, 0.3);
-  animation: intro-title-in 1.4s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 0 14px rgba(168, 85, 247, 0.55);
+  animation: logout-blip 1.4s ease-in-out infinite;
 }
 
-.intro-tagline {
-  margin: 14px 0 0;
-  min-height: 22px;
-  font-size: clamp(13px, 2.2vw, 16px);
-  color: rgba(222, 216, 255, 0.75);
-  letter-spacing: 0.06em;
-  animation: intro-tag-in 0.7s ease both;
+@keyframes logout-spin {
+  to { transform: rotate(360deg); }
 }
 
-.intro-progress {
-  width: min(340px, 70vw);
-  height: 4px;
-  margin-top: 40px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  overflow: hidden;
-  pointer-events: none;
+@keyframes logout-pulse {
+  0%, 100% { transform: scale(0.75); opacity: 0.7; }
+  50% { transform: scale(1.05); opacity: 1; }
 }
 
-.intro-progress-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, #9b5cff, #5b8cff, #22c55e);
-  box-shadow: 0 0 14px rgba(155, 92, 255, 0.7);
-  transition: width 0.15s ease;
+@keyframes logout-blip {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
 }
 
-.intro-progress-labels {
-  width: min(340px, 70vw);
-  margin-top: 12px;
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: rgba(222, 216, 255, 0.55);
-  letter-spacing: 0.05em;
-  pointer-events: none;
-}
-
-.intro-skip {
-  margin-top: 26px;
-  padding: 8px 18px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: rgba(222, 216, 255, 0.8);
-  font-family: inherit;
-  font-size: 12.5px;
-  cursor: pointer;
-  pointer-events: auto;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
-}
-
-.intro-skip:hover {
-  background: rgba(155, 92, 255, 0.15);
-  border-color: rgba(155, 92, 255, 0.5);
-  color: #fff;
-}
-
-@keyframes intro-fade {
+@keyframes login-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
 
-@keyframes intro-logo-in {
-  from { opacity: 0; transform: scale(0.5) rotate(-14deg); }
-  to { opacity: 1; transform: scale(1) rotate(0); }
-}
-
-@keyframes intro-title-in {
-  from { opacity: 0; transform: translateY(26px) scale(0.95); letter-spacing: 0.4em; filter: blur(8px); }
-  to { opacity: 1; transform: translateY(0) scale(1); letter-spacing: 0.22em; filter: blur(0); }
-}
-
-@keyframes intro-tag-in {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 

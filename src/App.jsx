@@ -1,3 +1,4 @@
+import React from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   WandSparkles,
@@ -45,10 +46,8 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { supabase, authEnabled, getAccessToken } from './supabaseClient'
-import CinematicIntro from './CinematicIntro'
 
-const ASPECTS = [
-  { id: '1:1', w: 1, h: 1, label: '1:1' },
+const ASPECTS = [  { id: '1:1', w: 1, h: 1, label: '1:1' },
   { id: '4:3', w: 4, h: 3, label: '4:3' },
   { id: '3:4', w: 3, h: 4, label: '3:4' },
   { id: '16:9', w: 16, h: 9, label: '16:9' },
@@ -822,7 +821,7 @@ function HistoryRow({ entry, isFavorite, onToggleFavorite, onView, onDelete }) {
   )
 }
 
-function SettingsModal({ settings, onChange, onClose, onDone, theme, onToggleTheme, onApplyDefaults, onClearHistory, onClearFavs, onClearNotifs, historyCount, favCount, notifCount }) {
+function SettingsModal({ settings, onChange, onClose, onDone, theme, onToggleTheme, onApplyDefaults, onClearHistory, onClearFavs, onClearNotifs, historyCount, favCount, notifCount, guest }) {
   const [confirm, setConfirm] = useState('')
 
   function patch(partial) {
@@ -861,20 +860,22 @@ function SettingsModal({ settings, onChange, onClose, onDone, theme, onToggleThe
               <label className="setting-field">
                 <span>Display name</span>
                 <input
-                  value={settings.name}
+                  value={guest ? 'Guest' : settings.name}
                   onChange={(e) => patch({ name: e.target.value })}
                   placeholder="Your name"
+                  readOnly={guest}
+                  title={guest ? 'Sign in to edit your display name' : undefined}
                 />
               </label>
               <label className="setting-field">
                 <span>Email</span>
                 <input
                   type="email"
-                  value={settings.email}
+                  value={guest ? 'Guest@pixora.com' : settings.email}
                   onChange={(e) => patch({ email: e.target.value })}
                   placeholder="you@pixora.ai"
-                  readOnly={authEnabled}
-                  title={authEnabled ? 'Email is tied to your account' : undefined}
+                  readOnly
+                  title={guest ? 'Guest viewing mode' : 'Email is tied to your account'}
                 />
               </label>
             </div>
@@ -1460,20 +1461,14 @@ function AuthModal({ onClose }) {
         </div>
       </div>
     </div>
-  )
+    )
 }
+
 
 export default function App() {
   const [theme, setTheme] = useState(() => {
     const saved = localStorage.getItem('pixora-theme')
     return saved === 'light' ? 'light' : 'dark'
-  })
-  const [showIntro, setShowIntro] = useState(() => {
-    try {
-      return !localStorage.getItem('pixora-intro-seen')
-    } catch {
-      return false
-    }
   })
   const [activeNav, setActiveNav] = useState('generate')
   const [settings, setSettings] = useState(() => {
@@ -1513,6 +1508,7 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [authReady, setAuthReady] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
+  const [logoutFx, setLogoutFx] = useState(false)
 
   const [notifications, setNotifications] = useState(() => {
     try {
@@ -1996,9 +1992,12 @@ export default function App() {
   }
 
   async function handleLogout() {
-    await supabase.auth.signOut()
+    setLogoutFx(true)
+    try {
+      await supabase.auth.signOut()
+    } catch {}
     setSession(null)
-    window.location.reload()
+    setTimeout(() => window.location.reload(), 900)
   }
 
   if (authEnabled && !authReady) {
@@ -2011,10 +2010,18 @@ export default function App() {
 
   return (
     <>
-      {showIntro && <CinematicIntro onFinish={() => {
-        try { localStorage.setItem('pixora-intro-seen', '1') } catch {}
-        setShowIntro(false)
-      }} />}
+      {logoutFx && (
+        <div className="logout-fx">
+          <div className="logout-fx-center">
+            <div className="logout-spinner">
+              <span className="logout-spinner-ring" />
+              <span className="logout-spinner-ring mid" />
+              <span className="logout-spinner-ring dot" />
+            </div>
+            <span className="logout-fx-text">See you soon</span>
+          </div>
+        </div>
+      )}
       <div className="app">
       <Sidebar active={activeNav} onNavigate={handleNavigate} user={displayUser} onOpenSettings={() => setSettingsOpen(true)} onUpgrade={() => setPricingOpen(true)} />
 
@@ -2420,6 +2427,7 @@ export default function App() {
         <SettingsModal
           settings={settings}
           onChange={setSettings}
+          guest={!(authEnabled && session)}
           onClose={() => setSettingsOpen(false)}
           onDone={async () => {
             const token = authEnabled ? await getAccessToken() : null
