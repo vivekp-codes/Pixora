@@ -8,7 +8,8 @@
   "scripts": {
     "dev:server": "node server.js",
     "dev:client": "vite",
-    "dev": "concurrently -n server,client -c yellow,cyan \"npm:dev:server\" \"npm:dev:client\"",
+    "kill:port": "node scripts/kill-port.mjs 3000",
+    "dev": "node scripts/kill-port.mjs 3000 && concurrently -n server,client -c yellow,cyan \"npm:dev:server\" \"npm:dev:client\"",
     "build": "vite build",
     "start": "node server.js",
     "preview": "vite preview"

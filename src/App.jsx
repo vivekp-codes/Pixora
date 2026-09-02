@@ -78,6 +78,60 @@ const NOTIFY_LABELS = {
 
 const VOWELS = new Set(['a', 'e', 'i', 'o', 'u', 'y'])
 
+function storageUid() {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (!key || !/^sb-.*-auth-token$/.test(key)) continue
+      const parsed = JSON.parse(localStorage.getItem(key) || 'null')
+      const uid = parsed?.user?.id || parsed?.currentSession?.user?.id
+      if (uid) return uid
+    }
+  } catch {}
+  return 'guest'
+}
+
+function readScopedStore(key, uid) {
+  try {
+    const cached = JSON.parse(localStorage.getItem(key) || 'null')
+    if (cached && cached.uid === uid && Array.isArray(cached.items)) return cached.items
+  } catch {}
+  return null
+}
+
+function writeScopedStore(key, uid, items) {
+  try {
+    localStorage.setItem(key, JSON.stringify({ uid, items }))
+  } catch {}
+}
+
+function removeStore(key) {
+  try { localStorage.removeItem(key) } catch {}
+}
+
+const CREDIT_TOTAL = 100
+const CREDIT_COST = 10
+const CREDIT_WINDOW_MS = 12 * 60 * 60 * 1000
+
+function readCredits(uid, at = Date.now()) {
+  const cached = readScopedStore('pixora-credits', uid)
+  if (!cached || typeof cached.windowStart !== 'number' || typeof cached.credits !== 'number') {
+    return { uid, windowStart: at, credits: CREDIT_TOTAL }
+  }
+  if (at - cached.windowStart >= CREDIT_WINDOW_MS) {
+    return { uid, windowStart: at, credits: CREDIT_TOTAL }
+  }
+  return { ...cached, uid }
+}
+
+function formatCountdown(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000))
+  const h = String(Math.floor(s / 3600)).padStart(2, '0')
+  const m = String(Math.floor((s % 3600) / 60)).padStart(2, '0')
+  const sec = String(s % 60).padStart(2, '0')
+  return `${h}:${m}:${sec}`
+}
+
 function isGibberish(text) {
   const words = text
     .toLowerCase()
@@ -136,7 +190,7 @@ function Avatar({ name, size = 'md' }) {
   )
 }
 
-function Sidebar({ active, onNavigate, user, onOpenSettings, onUpgrade }) {
+function Sidebar({ active, onNavigate, user, onOpenSettings, onUpgrade, credits, creditPct, usedCredits, resetLabel }) {
   const items = [
     { id: 'generate', label: 'Generate', icon: Brain },
     { id: 'explore', label: 'Explore', icon: Binoculars },
@@ -185,16 +239,17 @@ function Sidebar({ active, onNavigate, user, onOpenSettings, onUpgrade }) {
         <div className="plan-card">
           <div className="plan-head">
             <span className="plan-badge">PRO</span>
-            <span className="plan-credits"><Gem size={12} /> 128</span>
+            <span className="plan-credits"><Gem size={12} /> {credits}</span>
           </div>
-          <p className="plan-name">Credits remaining</p>
+          <p className="plan-name">{credits === 0 ? 'Out of credits — resets soon' : 'Credits remaining'}</p>
           <div className="plan-track">
-            <span className="plan-fill" style={{ width: '64%' }} />
+            <span className="plan-fill" style={{ width: `${creditPct}%` }} />
           </div>
           <div className="plan-meta">
-            <span>128 of 200 used</span>
+            <span>{usedCredits} of {CREDIT_TOTAL} used</span>
             <button className="plan-btn" onClick={onUpgrade}>Upgrade</button>
           </div>
+          <div className="plan-timer"><Clock size={12} /> resets in {resetLabel}</div>
         </div>
       </div>
     </aside>
@@ -352,7 +407,7 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
       <div className="top-actions">
         <button className="credits-chip" aria-label="Credits">
           <Gem size={15} fill="currentColor" />
-          <span>{credits}</span>
+          <span>{credits}/{CREDIT_TOTAL}</span>
           <span className="credits-label">credits</span>
         </button>
         <button className="icon-btn theme-btn" onClick={onToggleTheme} aria-label="Toggle theme" title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
@@ -613,9 +668,12 @@ function PendingCard({ entry }) {
   return (
     <article className="result-card pending-card">
       <div className="result-thumb pending-thumb">
-        <span className="pending-label">
-          <span className="mini-spin" /> Rendering…
-        </span>
+        <div className="pending-glow" />
+        <div className="logout-spinner pending-card-spinner">
+          <span className="logout-spinner-ring" />
+          <span className="logout-spinner-ring mid" />
+          <span className="logout-spinner-ring dot" />
+        </div>
       </div>
       <div className="result-body">
         <div className="skel-line skel-caption" />
@@ -1481,7 +1539,10 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [pricingOpen, setPricingOpen] = useState(false)
   const [notFound, setNotFound] = useState(null)
-  const [prints, setPrints] = useState([])
+  const [prints, setPrints] = useState(() => {
+    const items = readScopedStore('pixora-history-cache', storageUid())
+    return items ? items.filter((p) => !p._pending) : []
+  })
   const [prompt, setPrompt] = useState('')
   const [error, setError] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
@@ -1501,6 +1562,7 @@ export default function App() {
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [viewer, setViewer] = useState(null)
+  const [loadingResults, setLoadingResults] = useState(false)
   const [warnPrompt, setWarnPrompt] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -1511,17 +1573,43 @@ export default function App() {
   const [logoutFx, setLogoutFx] = useState(false)
 
   const [notifications, setNotifications] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('pixora-notifs') || '[]')
-    } catch {
-      return []
-    }
+    const items = readScopedStore('pixora-notifs', storageUid())
+    return items ?? []
   })
   const [notifOpen, setNotifOpen] = useState(false)
 
   useEffect(() => {
-    localStorage.setItem('pixora-notifs', JSON.stringify(notifications))
+    writeScopedStore('pixora-notifs', session?.user?.id || storageUid(), notifications)
   }, [notifications])
+
+  const [credits, setCredits] = useState(() => readCredits(storageUid()))
+  const [creditsNow, setCreditsNow] = useState(Date.now())
+
+  useEffect(() => {
+    const t = setInterval(() => setCreditsNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  useEffect(() => {
+    if (creditsNow - credits.windowStart >= CREDIT_WINDOW_MS) {
+      setCredits(readCredits(credits.uid, creditsNow))
+    }
+  }, [creditsNow, credits])
+
+  useEffect(() => {
+    if (!authEnabled) return
+    setCredits(readCredits(session?.user?.id || 'guest', Date.now()))
+  }, [session])
+
+  useEffect(() => {
+    writeScopedStore('pixora-credits', session?.user?.id || storageUid(), credits)
+  }, [credits])
+
+  const creditsRemaining = Math.max(0, credits.credits)
+  const usedCredits = CREDIT_TOTAL - creditsRemaining
+  const creditPct = (creditsRemaining / CREDIT_TOTAL) * 100
+  const resetInMs = Math.max(0, credits.windowStart + CREDIT_WINDOW_MS - creditsNow)
+  const resetLabel = formatCountdown(resetInMs)
 
   useEffect(() => {
     localStorage.setItem('pixora-settings', JSON.stringify(settings))
@@ -1532,8 +1620,19 @@ export default function App() {
       setAuthReady(true)
       return
     }
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (!data.session) {
+        setSession(null)
+        setAuthReady(true)
+        return
+      }
+      const { data: userData, error } = await supabase.auth.getUser()
+      if (error || !userData.user) {
+        purgeLocalSession()
+        setSession(null)
+      } else {
+        setSession(data.session)
+      }
       setAuthReady(true)
     })
     const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => {
@@ -1755,6 +1854,9 @@ export default function App() {
   }
 
   async function generateExtra(promptText, width, height) {
+    if (creditsRemaining < CREDIT_COST) {
+      throw new Error(`Not enough credits — your credits reset in ${resetLabel}.`)
+    }
     const id = `pending-${Date.now()}-${Math.floor(Math.random() * 1e6)}`
     setPrints((prev) => [{ _pending: true, id, prompt: promptText, width, height }, ...prev])
     try {
@@ -1771,6 +1873,11 @@ export default function App() {
         throw new Error(data.error || 'Something went wrong.')
       }
       setPrints((prev) => prev.map((p) => (p.id === id ? data : p)))
+      setCredits((prev) => {
+        const at = Date.now()
+        if (at - prev.windowStart >= CREDIT_WINDOW_MS) return readCredits(prev.uid, at)
+        return { ...prev, credits: Math.max(0, prev.credits - CREDIT_COST) }
+      })
       return data
     } catch (err) {
       setPrints((prev) => prev.filter((p) => p.id !== id))
@@ -1787,13 +1894,13 @@ export default function App() {
     } else if (action === 'regenerate') {
       try {
         const target = fitRect(entry.width, entry.height)
-        await generateExtra(entry.prompt, target.width, target.height)
+        const data = await generateExtra(entry.prompt, target.width, target.height)
         notify('Image regenerated')
         pushNotification('regenerated', 'Image regenerated', {
-          url: entry.url,
-          prompt: entry.prompt,
-          width: entry.width,
-          height: entry.height,
+          url: data.url,
+          prompt: data.prompt,
+          width: data.width,
+          height: data.height,
         })
       } catch (err) {
         notify(err.message || 'Regeneration failed')
@@ -1843,11 +1950,30 @@ export default function App() {
     return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
   }
 
+  function purgeAuthToken() {
+    removeStore('supabase.auth.token')
+    try { sessionStorage.removeItem('supabase.auth.token') } catch {}
+  }
+
+  function purgeLocalSession() {
+    purgeAuthToken()
+    removeStore('pixora-history-cache')
+    removeStore('pixora-notifs')
+    setSession(null)
+  }
+
+  async function forceClearSession() {
+    try { await supabase.auth.signOut({ scope: 'local' }) } catch {}
+    purgeAuthToken()
+    setSession(null)
+  }
+
   async function loadHistory() {
+    setLoadingResults(true)
     try {
       const res = await fetch('/api/history', { headers: await apiHeaders() })
       if (res.status === 401) {
-        await supabase.auth.signOut()
+        purgeLocalSession()
         setSession(null)
         return
       }
@@ -1856,9 +1982,12 @@ export default function App() {
       if (Array.isArray(history)) {
         setPrints(history)
         setFavorites(new Set(history.filter((e) => e.favorite).map((e) => e.id)))
+        writeScopedStore('pixora-history-cache', session?.user?.id || storageUid(), history)
       }
     } catch (err) {
       console.error("Couldn't load history:", err)
+    } finally {
+      setLoadingResults(false)
     }
   }
 
@@ -1876,7 +2005,7 @@ export default function App() {
       try {
         const res = await fetch('/api/profile', { headers: { Authorization: `Bearer ${token}` } })
         if (res.status === 401) {
-          await supabase.auth.signOut()
+          purgeLocalSession()
           setSession(null)
           return
         }
@@ -1921,10 +2050,25 @@ export default function App() {
       return
     }
 
+    const needed = CREDIT_COST * imageCount
+    if (creditsRemaining < needed) {
+      setError(`Not enough credits — your credits reset in ${resetLabel}.`)
+      return
+    }
+
     const finalPrompt = trimmed
 
     setIsGenerating(true)
     setGenerated(0)
+    const stamp = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`
+    const pendingIds = Array.from(
+      { length: imageCount },
+      (_, i) => `pending-${stamp}-${i}`
+    )
+    setPrints((prev) => [
+      ...pendingIds.map((id) => ({ _pending: true, id, prompt: finalPrompt, width: dimensions.width, height: dimensions.height })),
+      ...prev,
+    ])
     try {
       const created = []
       for (let i = 0; i < imageCount; i++) {
@@ -1944,9 +2088,9 @@ export default function App() {
         }
         created.push(data)
         setGenerated(i + 1)
+        setPrints((prev) => prev.map((p) => (p.id === pendingIds[i] ? data : p)))
       }
       if (created.length) {
-        setPrints((prev) => [...created, ...prev])
         galleryRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         const first = created[0]
         pushNotification(
@@ -1954,9 +2098,19 @@ export default function App() {
           created.length > 1 ? `${created.length} new images generated` : 'Your image is ready',
           { url: first.url, prompt: first.prompt, width: first.width, height: first.height }
         )
+        setCredits((prev) => {
+          const at = Date.now()
+          if (at - prev.windowStart >= CREDIT_WINDOW_MS) return readCredits(prev.uid, at)
+          return { ...prev, credits: Math.max(0, prev.credits - CREDIT_COST * created.length) }
+        })
+      }
+      if (created.length < pendingIds.length) {
+        const leftover = new Set(pendingIds.slice(created.length))
+        setPrints((prev) => prev.filter((p) => !leftover.has(p.id)))
       }
     } catch (err) {
       setError(err.message || 'Something went wrong.')
+      setPrints((prev) => prev.filter((p) => !pendingIds.includes(p.id)))
     } finally {
       setIsGenerating(false)
     }
@@ -1993,10 +2147,7 @@ export default function App() {
 
   async function handleLogout() {
     setLogoutFx(true)
-    try {
-      await supabase.auth.signOut()
-    } catch {}
-    setSession(null)
+    await forceClearSession()
     setTimeout(() => window.location.reload(), 900)
   }
 
@@ -2023,12 +2174,12 @@ export default function App() {
         </div>
       )}
       <div className="app">
-      <Sidebar active={activeNav} onNavigate={handleNavigate} user={displayUser} onOpenSettings={() => setSettingsOpen(true)} onUpgrade={() => setPricingOpen(true)} />
+      <Sidebar active={activeNav} onNavigate={handleNavigate} user={displayUser} onOpenSettings={() => setSettingsOpen(true)} onUpgrade={() => setPricingOpen(true)} credits={creditsRemaining} creditPct={creditPct} usedCredits={usedCredits} resetLabel={resetLabel} />
 
       <main className="main">
         <div className="main-body">
           <Topbar
-            credits={120}
+            credits={creditsRemaining}
             onNew={handleNew}
             theme={theme}
             onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
@@ -2126,19 +2277,18 @@ export default function App() {
                   }}
                 />
 
-                {isGenerating && (
-                  <div className="grid loading-grid">
-                    {Array.from({ length: imageCount }).map((_, i) => (
-                      <div className="skel" key={i}>
-                        <div className="skel-img" />
-                        <div className="skel-line w70" />
-                        <div className="skel-line w40" />
-                      </div>
-                    ))}
+                {loadingResults && prints.length === 0 && (
+                  <div className="results-loading">
+                    <div className="logout-spinner">
+                      <span className="logout-spinner-ring" />
+                      <span className="logout-spinner-ring mid" />
+                      <span className="logout-spinner-ring dot" />
+                    </div>
+                    <span className="results-loading-text">Fetching your results…</span>
                   </div>
                 )}
 
-                {!isGenerating && (
+                {!(loadingResults && prints.length === 0) && (
                   <GalleryGrid
                     entries={visiblePrints}
                     favorites={favorites}

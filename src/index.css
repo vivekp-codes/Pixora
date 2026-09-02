@@ -687,6 +687,19 @@ button {
   color: var(--text-3);
 }
 
+.plan-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.65);
+  font-variant-numeric: tabular-nums;
+}
+
+.plan-timer svg {
+  color: var(--purple-hi);
+}
+
 .icon-btn {
   position: relative;
   width: 40px;
@@ -1930,30 +1943,46 @@ button {
 }
 
 .pending-thumb {
+  position: relative;
   display: grid;
   place-items: center;
-  background: linear-gradient(110deg, var(--skel-1) 8%, var(--skel-2) 18%, var(--skel-1) 33%);
+  overflow: hidden;
+  background: linear-gradient(110deg, color-mix(in srgb, var(--skel-1) 92%, var(--purple-mid) 8%) 8%, color-mix(in srgb, var(--skel-2) 90%, var(--purple-mid) 10%) 18%, color-mix(in srgb, var(--skel-1) 92%, var(--purple-mid) 8%) 33%);
   background-size: 200% 100%;
   animation: shimmer 1.4s linear infinite;
 }
 
-.pending-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 15px;
-  border-radius: 999px;
-  background: var(--panel-solid);
-  border: 1px solid var(--line-strong);
-  color: var(--text-2);
-  font-size: 13px;
-  font-weight: 500;
-  box-shadow: var(--shadow);
+.pending-glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse 60% 55% at 50% 42%, rgba(155, 92, 255, 0.16), transparent 65%);
+  animation: pending-breathe 2.2s ease-in-out infinite;
+  pointer-events: none;
 }
 
-.pending-card .mini-spin {
-  border-color: var(--line-strong);
-  border-top-color: var(--purple-hi);
+.pending-card-spinner {
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+}
+
+.pending-card-spinner .logout-spinner-ring {
+  border-width: 3px;
+}
+
+.pending-card-spinner .logout-spinner-ring.mid {
+  inset: 4px;
+  border-width: 2px;
+}
+
+.pending-card-spinner .logout-spinner-ring.dot {
+  inset: 9px;
+  box-shadow: 0 0 12px rgba(168, 85, 247, 0.9);
+}
+
+@keyframes pending-breathe {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.12); }
 }
 
 .more-wrap {
@@ -2106,25 +2135,6 @@ button {
 
 /* loading skeletons */
 
-.loading-grid {
-  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
-}
-
-.skel {
-  background: var(--panel-solid);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  padding-bottom: 16px;
-}
-
-.skel-img {
-  aspect-ratio: 1 / 1;
-  background: linear-gradient(110deg, var(--skel-1) 8%, var(--skel-2) 18%, var(--skel-1) 33%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s linear infinite;
-}
-
 .skel-line {
   height: 12px;
   border-radius: 6px;
@@ -2133,6 +2143,10 @@ button {
   background-size: 200% 100%;
   animation: shimmer 1.4s linear infinite;
 }
+
+.skel-line:nth-child(1) { animation-delay: 0s; }
+.skel-line:nth-child(2) { animation-delay: 0.15s; }
+.skel-line:nth-child(3) { animation-delay: 0.3s; }
 
 .skel-line.w90 { width: 90%; }
 .skel-line.w70 { width: 70%; }
@@ -2148,6 +2162,10 @@ button {
   background-size: 200% 100%;
   animation: shimmer 1.4s linear infinite;
 }
+
+.skel-cell:nth-child(1) { animation-delay: 0.4s; }
+.skel-cell:nth-child(2) { animation-delay: 0.55s; }
+.skel-cell:nth-child(3) { animation-delay: 0.7s; }
 
 .pending-card .skel-line {
   margin: 9px 4px 0;
@@ -3577,10 +3595,10 @@ button {
     height: 13px;
   }
 
-  .pending-label {
-    gap: 7px;
-    padding: 7px 12px;
-    font-size: 11px;
+  .pending-bar {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
   }
 
   .mini-spin {
@@ -4831,6 +4849,38 @@ button {
 @keyframes login-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* ---------- results loading spinner ---------- */
+
+.results-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  padding: 56px 0 64px;
+  animation: login-fade-in 0.25s ease both;
+}
+
+.results-loading-text {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: rgba(222, 216, 255, 0.75);
+  animation: logout-blip 1.4s ease-in-out infinite;
+}
+
+.results-loading .logout-spinner-ring {
+  animation-name: logout-spin;
+}
+
+.results-loading .logout-spinner-ring.mid {
+  animation-name: logout-spin;
+}
+
+.results-loading .logout-spinner-ring.dot {
+  animation-name: logout-pulse;
 }
 
 

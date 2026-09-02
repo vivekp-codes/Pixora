@@ -57,6 +57,31 @@ function writeHistory(entries) {
   fs.writeFileSync(HISTORY_FILE, JSON.stringify(entries, null, 2));
 }
 
+// Express 4 does not catch errors thrown inside async handlers by default.
+// Without this, one rejected promise kills the whole Node process, which
+// drops every in-flight connection (browser sees net::ERR_CONNECTION_RESET).
+function asyncHandler(fn) {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch((err) => {
+      console.error("Request handler error:", err.message);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Something went wrong on the server." });
+      } else {
+        res.end();
+      }
+    });
+  };
+}
+
+// Last-resort safety net: log rather than crash. Prevents a single bad
+// request from taking the whole API down.
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason?.stack || reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err.stack || err);
+});
+
 function clampDimension(value, fallback) {
   const n = parseInt(value, 10);
   if (Number.isNaN(n)) return fallback;
@@ -108,16 +133,22 @@ async function requireUser(req, res, next) {
     return res.status(401).json({ error: "Please sign in to continue." });
   }
 
-  const { data, error } = await supabase.auth.getUser(match[1]);
-  if (error || !data.user) {
-    return res.status(401).json({ error: "Your session expired. Please sign in again." });
-  }
+  try {
+    const { data, error } = await supabase.auth.getUser(match[1]);
+    if (error || !data.user) {
+      console.error("Auth validation failed:", error?.message || "no user");
+      return res.status(401).json({ error: "Your session expired. Please sign in again." });
+    }
 
-  req.user = data.user;
-  req.userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers: { Authorization: `Bearer ${match[1]}` } },
-  });
-  next();
+    req.user = data.user;
+    req.userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: { headers: { Authorization: `Bearer ${match[1]}` } },
+    });
+    next();
+  } catch (err) {
+    console.error("Auth check threw:", err.message);
+    return res.status(503).json({ error: "Could not verify your session. Check your connection and try again." });
+  }
 }
 
 // One-time: lift any legacy local prints into the database for the first user
@@ -147,7 +178,7 @@ async function migrateLegacy(userClient, userId) {
 }
 
 // Return past prints, newest first
-app.get("/api/history", requireUser, async (req, res) => {
+app.get("/api/history", requireUser, asyncHandler(async (req, res) => {
   if (!req.userClient) {
     return res.json(readHistory().slice().reverse());
   }
@@ -165,10 +196,10 @@ app.get("/api/history", requireUser, async (req, res) => {
     console.error("History load failed:", err.message);
     res.status(500).json({ error: "Could not load your images." });
   }
-});
+}));
 
 // Generate a new print from a text prompt via Pollinations.ai (no API key required)
-app.post("/api/generate", requireUser, async (req, res) => {
+app.post("/api/generate", requireUser, asyncHandler(async (req, res) => {
   const prompt = (req.body.prompt || "").trim();
   const width = clampDimension(req.body.width, 768);
   const height = clampDimension(req.body.height, 768);
@@ -261,10 +292,10 @@ app.post("/api/generate", requireUser, async (req, res) => {
     console.error("Generation failed:", err.message);
     res.status(502).json({ error: "The image generator didn't respond. Try again in a moment." });
   }
-});
+}));
 
 // Delete a print by id: removes the database row and the Cloudinary/local asset
-app.post("/api/delete", requireUser, async (req, res) => {
+app.post("/api/delete", requireUser, asyncHandler(async (req, res) => {
   const id = (req.body.id || "").trim();
   if (!id) {
     return res.status(400).json({ error: "An image id is required." });
@@ -311,10 +342,10 @@ app.post("/api/delete", requireUser, async (req, res) => {
     console.error("Delete failed:", err.message);
     res.status(500).json({ error: "Could not delete the image." });
   }
-});
+}));
 
 // Toggle favorite state for an image
-app.post("/api/favorite", requireUser, async (req, res) => {
+app.post("/api/favorite", requireUser, asyncHandler(async (req, res) => {
   if (!req.userClient) {
     return res.json({ ok: true, favorite: Boolean(req.body.favorite) });
   }
@@ -340,10 +371,10 @@ app.post("/api/favorite", requireUser, async (req, res) => {
     console.error("Favorite update failed:", err.message);
     res.status(500).json({ error: "Could not update the image." });
   }
-});
+}));
 
 // Update the display name shown on the user's profile
-app.post("/api/profile", requireUser, async (req, res) => {
+app.post("/api/profile", requireUser, asyncHandler(async (req, res) => {
   if (!req.userClient) {
     return res.json({ ok: true, name: req.body.name || "User" });
   }
@@ -363,10 +394,10 @@ app.post("/api/profile", requireUser, async (req, res) => {
     console.error("Profile update failed:", err.message);
     res.status(500).json({ error: "Could not update your profile." });
   }
-});
+}));
 
 // Read the signed-in user's display name
-app.get("/api/profile", requireUser, async (req, res) => {
+app.get("/api/profile", requireUser, asyncHandler(async (req, res) => {
   if (!req.userClient) {
     return res.json({ name: "User" });
   }
@@ -386,10 +417,10 @@ app.get("/api/profile", requireUser, async (req, res) => {
     console.error("Profile load failed:", err.message);
     res.status(500).json({ error: "Could not load your profile." });
   }
-});
+}));
 
 // Bulk clear: either the whole history or all favorites
-app.post("/api/clear", requireUser, async (req, res) => {
+app.post("/api/clear", requireUser, asyncHandler(async (req, res) => {
   const target = req.body.target;
 
   if (!req.userClient) {
@@ -415,7 +446,7 @@ app.post("/api/clear", requireUser, async (req, res) => {
     console.error("Clear failed:", err.message);
     res.status(500).json({ error: "Could not clear the images." });
   }
-});
+}));
 
 // In production, serve the built React app. In dev, the Vite dev server
 // (port 5173) handles the frontend and proxies /api here instead.
@@ -426,6 +457,16 @@ if (fs.existsSync(CLIENT_DIST)) {
   });
 }
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Print Lab API running at http://localhost:${PORT}`);
+});
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`\nPort ${PORT} is already in use by another process.`);
+    console.error("A previous server may still be running (lost orphan when the terminal closed).");
+    console.error("Fix: run  npm run kill:port   then   npm run dev\n");
+    process.exit(1);
+  }
+  throw err;
 });
