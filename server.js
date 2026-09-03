@@ -457,16 +457,23 @@ if (fs.existsSync(CLIENT_DIST)) {
   });
 }
 
-const server = app.listen(PORT, () => {
-  console.log(`Print Lab API running at http://localhost:${PORT}`);
-});
+// Vercel serverless invokes the exported `app` directly, so we must NOT
+// call app.listen() in that environment (it would leave dangling handles).
+// Locally we keep the familiar `npm run dev` / `npm start` behaviour.
+if (!process.env.VERCEL) {
+  const server = app.listen(PORT, () => {
+    console.log(`Print Lab API running at http://localhost:${PORT}`);
+  });
 
-server.on("error", (err) => {
-  if (err.code === "EADDRINUSE") {
-    console.error(`\nPort ${PORT} is already in use by another process.`);
-    console.error("A previous server may still be running (lost orphan when the terminal closed).");
-    console.error("Fix: run  npm run kill:port   then   npm run dev\n");
-    process.exit(1);
-  }
-  throw err;
-});
+  server.on("error", (err) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(`\nPort ${PORT} is already in use by another process.`);
+      console.error("A previous server may still be running (lost orphan when the terminal closed).");
+      console.error("Fix: run  npm run kill:port   then   npm run dev\n");
+      process.exit(1);
+    }
+    throw err;
+  });
+}
+
+export { app };
