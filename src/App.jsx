@@ -109,12 +109,16 @@ function removeStore(key) {
   try { localStorage.removeItem(key) } catch {}
 }
 
-const CREDIT_TOTAL = 100
+const CREDIT_TOTAL = 30
 const CREDIT_COST = 10
 const CREDIT_WINDOW_MS = 12 * 60 * 60 * 1000
 
 function readCredits(uid, at = Date.now()) {
-  const cached = readScopedStore('pixora-credits', uid)
+  let cached = null
+  try {
+    const raw = JSON.parse(localStorage.getItem('pixora-credits') || 'null')
+    if (raw && raw.uid === uid) cached = raw.items
+  } catch {}
   if (!cached || typeof cached.windowStart !== 'number' || typeof cached.credits !== 'number') {
     return { uid, windowStart: at, credits: CREDIT_TOTAL }
   }
@@ -249,7 +253,9 @@ function Sidebar({ active, onNavigate, user, onOpenSettings, onUpgrade, credits,
             <span>{usedCredits} of {CREDIT_TOTAL} used</span>
             <button className="plan-btn" onClick={onUpgrade}>Upgrade</button>
           </div>
-          <div className="plan-timer"><Clock size={12} /> resets in {resetLabel}</div>
+          {credits === 0 && (
+            <div className="plan-timer"><Clock size={12} /> resets in {resetLabel}</div>
+          )}
         </div>
       </div>
     </aside>
@@ -361,14 +367,14 @@ function NotificationsPanel({ items, onClearAll, onDelete, onItemClick, style })
   )
 }
 
-function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen, onToggleNotif, onClearAll, onDeleteNotif, onNotifItem, showHero, userName, videoAutoplay, onLogout, onLogin, onOpenSettings }) {
+function Topbar({ credits, resetLabel, onNew, theme, onToggleTheme, notifications, notifOpen, onToggleNotif, onClearAll, onDeleteNotif, onNotifItem, showHero, userName, userEmail, videoAutoplay, onLogout, onLogin, onOpenSettings }) {
   const unread = notifications.filter((n) => !n.read).length
   const notifRef = useRef(null)
   const vidRef = useRef(null)
-  const logoutRef = useRef(null)
   const [vidSeam, setVidSeam] = useState(false)
-  const [logoutOpen, setLogoutOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
   const [popX, setPopX] = useState(null)
+  const profileRef = useRef(null)
 
   function anchorFromEvent(e) {
     if (typeof window === 'undefined' || window.innerWidth > 860) return null
@@ -387,13 +393,13 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
   }, [notifOpen, onToggleNotif])
 
   useEffect(() => {
-    if (!logoutOpen) return
+    if (!profileOpen) return
     function handleClick(e) {
-      if (logoutRef.current && !logoutRef.current.contains(e.target)) setLogoutOpen(false)
+      if (profileRef.current && !profileRef.current.contains(e.target)) setProfileOpen(false)
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [logoutOpen])
+  }, [profileOpen])
 
   function handleVideoTime() {
     const v = vidRef.current
@@ -408,7 +414,7 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
         <button className="credits-chip" aria-label="Credits">
           <Gem size={15} fill="currentColor" />
           <span>{credits}/{CREDIT_TOTAL}</span>
-          <span className="credits-label">credits</span>
+          {credits === 0 && <span className="credits-chip-timer"><Clock size={12} /> {resetLabel}</span>}
         </button>
         <button className="icon-btn theme-btn" onClick={onToggleTheme} aria-label="Toggle theme" title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
           {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
@@ -453,38 +459,39 @@ function Topbar({ credits, onNew, theme, onToggleTheme, notifications, notifOpen
           </button>
         ) : (
           <>
-            <Avatar name={userName} />
-            {onLogout && (
-              <div className="logout-wrap" ref={logoutRef}>
-                <button
-                  className={`icon-btn logout-btn${logoutOpen ? ' active' : ''}`}
-                  title="Sign out"
-                  aria-label="Sign out"
-                  onClick={(e) => {
-                    const open = !logoutOpen
-                    if (open) setPopX(anchorFromEvent(e))
-                    setLogoutOpen(open)
-                  }}
-                >
-                  <LogOut size={17} />
-                </button>
-                {logoutOpen && (
-                  <>
-                    <div className="pop-overlay" onClick={() => setLogoutOpen(false)} />
-                    <div className="logout-pop" style={popX != null ? { left: `${popX}px` } : undefined}>
-                      <p className="logout-pop-title">Log out?</p>
-                      <p className="logout-pop-text">You'll need to sign in again to generate, save, and sync your images.</p>
-                      <div className="logout-pop-actions">
-                        <button className="ghost-btn" onClick={() => setLogoutOpen(false)}>Cancel</button>
-                        <button className="btn-danger" onClick={() => { setLogoutOpen(false); onLogout() }}>
-                          <LogOut size={15} /> Log out
-                        </button>
+            <div className="profile-wrap" ref={profileRef}>
+              <button
+                className={`icon-btn profile-trigger${profileOpen ? ' active' : ''}`}
+                aria-label="Account"
+                onClick={(e) => {
+                  const open = !profileOpen
+                  if (open) setPopX(anchorFromEvent(e))
+                  else setPopX(null)
+                  setProfileOpen(open)
+                }}
+              >
+                <Avatar name={userName} />
+              </button>
+              {profileOpen && (
+                <>
+                  <div className="pop-overlay" onClick={() => setProfileOpen(false)} />
+                  <div className="profile-pop">
+                    <div className="profile-pop-head">
+                      <Avatar name={userName} size="lg" />
+                      <div className="profile-pop-meta">
+                        <span className="profile-pop-name">{userName}</span>
+                        <span className="profile-pop-mail">{userEmail}</span>
                       </div>
                     </div>
-                  </>
-                )}
-              </div>
-            )}
+                    {onLogout && (
+                      <button className="profile-pop-logout" onClick={() => { setProfileOpen(false); onLogout() }}>
+                        <LogOut size={15} /> Log out
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </>
         )}
       </div>
@@ -2180,6 +2187,7 @@ export default function App() {
         <div className="main-body">
           <Topbar
             credits={creditsRemaining}
+            resetLabel={resetLabel}
             onNew={handleNew}
             theme={theme}
             onToggleTheme={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
@@ -2191,11 +2199,32 @@ export default function App() {
             onNotifItem={handleNotifItem}
             showHero={activeNav === 'generate'}
             userName={displayUser.name}
+            userEmail={displayUser.email}
             videoAutoplay={settings.autoplay}
             onLogout={authEnabled && session ? handleLogout : undefined}
             onLogin={authEnabled && !session ? () => setAuthOpen(true) : undefined}
             onOpenSettings={() => setSettingsOpen(true)}
           />
+
+          {activeNav === 'generate' && (
+            <div className="plan-card mobile-plan-card">
+              <div className="plan-head">
+                <span className="plan-badge">PRO</span>
+                <span className="plan-credits"><Gem size={12} /> {creditsRemaining}</span>
+              </div>
+              <p className="plan-name">{creditsRemaining === 0 ? 'Out of credits — resets soon' : 'Credits remaining'}</p>
+              <div className="plan-track">
+                <span className="plan-fill" style={{ width: `${creditPct}%` }} />
+              </div>
+              <div className="plan-meta">
+                <span>{usedCredits} of {CREDIT_TOTAL} used</span>
+                <button className="plan-btn" onClick={() => setPricingOpen(true)}>Upgrade</button>
+              </div>
+              {creditsRemaining === 0 && (
+                <div className="plan-timer"><Clock size={12} /> resets in {resetLabel}</div>
+              )}
+            </div>
+          )}
 
           {activeNav === 'generate' && (
             <>
@@ -2212,6 +2241,11 @@ export default function App() {
                       rows={3}
                       required
                     />
+                    {prompt && (
+                      <button type="button" className="clear-prompt" onClick={() => setPrompt('')} aria-label="Clear prompt" title="Clear prompt">
+                        <X size={14} />
+                      </button>
+                    )}
                     <span className="char-count">{prompt.length}/1000</span>
                     <button className="prompt-send" type="submit" disabled={isGenerating}>
                       {isGenerating ? <span className="spinner" /> : <><Brain size={16} strokeWidth={1.8} /> Generate</>}
