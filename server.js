@@ -36,9 +36,14 @@ const GENERATED_DIR = path.join(__dirname, "generated");
 const HISTORY_FILE = path.join(__dirname, "history.json");
 const CLIENT_DIST = path.join(__dirname, "dist");
 
-// Make sure our storage exists before we take any requests
-if (!fs.existsSync(GENERATED_DIR)) fs.mkdirSync(GENERATED_DIR, { recursive: true });
-if (!fs.existsSync(HISTORY_FILE)) fs.writeFileSync(HISTORY_FILE, "[]");
+// Make sure our storage exists before we take any requests. Guarded so a
+// read-only deployment filesystem (serverless) can't crash the process.
+try {
+  if (!fs.existsSync(GENERATED_DIR)) fs.mkdirSync(GENERATED_DIR, { recursive: true });
+  if (!fs.existsSync(HISTORY_FILE)) fs.writeFileSync(HISTORY_FILE, "[]");
+} catch (err) {
+  console.warn("Local storage init skipped (read-only fs):", err.message);
+}
 
 app.use(express.json());
 
@@ -54,7 +59,13 @@ function readHistory() {
 }
 
 function writeHistory(entries) {
-  fs.writeFileSync(HISTORY_FILE, JSON.stringify(entries, null, 2));
+  // Best-effort only: the deployment filesystem is read-only on serverless
+  // platforms, so failures here must never crash a request.
+  try {
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(entries, null, 2));
+  } catch (err) {
+    console.warn("History write skipped (read-only fs):", err.message);
+  }
 }
 
 // Express 4 does not catch errors thrown inside async handlers by default.
@@ -245,8 +256,16 @@ app.post("/api/generate", requireUser, asyncHandler(async (req, res) => {
 
     if (!url) {
       const filename = `${id}.jpg`;
-      fs.writeFileSync(path.join(GENERATED_DIR, filename), buffer);
-      url = `/generated/${filename}`;
+      try {
+        fs.writeFileSync(path.join(GENERATED_DIR, filename), buffer);
+        url = `/generated/${filename}`;
+      } catch (err) {
+        console.warn("Local image save skipped (read-only fs):", err.message);
+        url = null;
+      }
+      if (!url) {
+        return res.status(502).json({ error: "Storage isn't writable here. Check the Cloudinary configuration." });
+      }
     }
 
     const createdAt = new Date().toISOString();
@@ -311,7 +330,11 @@ app.post("/api/delete", requireUser, asyncHandler(async (req, res) => {
     const filename = path.basename(entry.url || "");
     const filePath = path.join(GENERATED_DIR, filename);
     if (filename && fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+      try {
+        fs.unlinkSync(filePath);
+      } catch (err) {
+        console.warn("Local image delete skipped (read-only fs):", err.message);
+      }
     }
     writeHistory(history.filter((e) => e.id !== id));
     return res.json({ ok: true, id });
