@@ -863,7 +863,7 @@ function HistoryRow({ entry, isFavorite, onToggleFavorite, onView, onDelete }) {
         <p className="history-prompt">{entry.prompt}</p>
         <div className="history-meta">
           <span className="chip">{entry.width}×{entry.height}</span>
-          <span className="chip">Pixora 2.0</span>
+          <span className="chip">Pixora</span>
         </div>
       </div>
       <span className="history-time">{date}</span>
