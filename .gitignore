@@ -5,3 +5,5 @@ generated/*
 history.json
 *.log
 .env
+.env.*
+env

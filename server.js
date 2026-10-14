@@ -4,10 +4,13 @@ import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { v2 as cloudinary } from "cloudinary";
-import { createClient } from "@supabase/supabase-js";
+import admin from "firebase-admin";
 
 try {
   process.loadEnvFile();
+} catch {}
+try {
+  process.loadEnvFile("env");
 } catch {}
 
 cloudinary.config({
@@ -21,10 +24,44 @@ const CLOUD_ENABLED = Boolean(
 );
 const CLOUD_FOLDER = "pixora";
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
-const AUTH_ENABLED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-const supabase = AUTH_ENABLED ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+// Firebase Admin verifies client ID tokens and talks to Firestore.
+// Credentials come from either one JSON blob (FIREBASE_SERVICE_ACCOUNT) or
+// the three split vars below. Unlike Supabase, nothing here ever pauses.
+function normalizeServiceAccount(raw) {
+  if (!raw) return null;
+  const projectId = raw.projectId || raw.project_id;
+  const clientEmail = raw.clientEmail || raw.client_email;
+  const privateKey = raw.privateKey || raw.private_key;
+  if (!projectId || !clientEmail || !privateKey) return null;
+  return { projectId, clientEmail, privateKey: String(privateKey).replace(/\\n/g, "\n") };
+}
+
+function loadServiceAccount() {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    try {
+      return normalizeServiceAccount(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT));
+    } catch (err) {
+      console.error("FIREBASE_SERVICE_ACCOUNT is not valid JSON:", err.message);
+      return null;
+    }
+  }
+  return normalizeServiceAccount({
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY,
+  });
+}
+
+const serviceAccount = loadServiceAccount();
+const AUTH_ENABLED = Boolean(serviceAccount);
+
+let db = null;
+if (AUTH_ENABLED) {
+  if (!admin.apps.length) {
+    admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+  }
+  db = admin.firestore();
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -99,17 +136,29 @@ function clampDimension(value, fallback) {
   return Math.min(1024, Math.max(256, n));
 }
 
-function mapRow(row) {
+function toIso(value) {
+  if (!value) return new Date().toISOString();
+  if (typeof value.toDate === "function") return value.toDate().toISOString();
+  if (value instanceof Date) return value.toISOString();
+  return String(value);
+}
+
+function mapDoc(doc) {
+  const d = doc.data() || {};
   return {
-    id: row.id,
-    prompt: row.prompt,
-    width: row.width,
-    height: row.height,
-    seed: row.seed,
-    url: row.url,
-    favorite: row.favorite,
-    createdAt: row.created_at,
+    id: doc.id,
+    prompt: d.prompt,
+    width: d.width,
+    height: d.height,
+    seed: d.seed,
+    url: d.url,
+    favorite: d.favorite,
+    createdAt: toIso(d.createdAt),
   };
+}
+
+function imagesCollection(userId) {
+  return db.collection("users").doc(userId).collection("images");
 }
 
 // Pull the Cloudinary public_id out of a stored URL so we can destroy the asset later
@@ -135,7 +184,6 @@ function destroyCloudAsset(url) {
 async function requireUser(req, res, next) {
   if (!AUTH_ENABLED) {
     req.user = null;
-    req.userClient = null;
     return next();
   }
 
@@ -145,64 +193,54 @@ async function requireUser(req, res, next) {
   }
 
   try {
-    const { data, error } = await supabase.auth.getUser(match[1]);
-    if (error || !data.user) {
-      console.error("Auth validation failed:", error?.message || "no user");
-      return res.status(401).json({ error: "Your session expired. Please sign in again." });
-    }
-
-    req.user = data.user;
-    req.userClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { Authorization: `Bearer ${match[1]}` } },
-    });
+    const decoded = await admin.auth().verifyIdToken(match[1]);
+    req.user = { id: decoded.uid, email: decoded.email || "", name: decoded.name || "" };
     next();
   } catch (err) {
-    console.error("Auth check threw:", err.message);
-    return res.status(503).json({ error: "Could not verify your session. Check your connection and try again." });
+    console.error("Auth validation failed:", err.message);
+    return res.status(401).json({ error: "Your session expired. Please sign in again." });
   }
 }
 
-// One-time: lift any legacy local prints into the database for the first user
-async function migrateLegacy(userClient, userId) {
-  const { data, error } = await userClient.from("images").select("id").limit(1);
-  if (error) throw error;
-  if (data.length) return false;
+// One-time: lift any legacy local prints into Firestore for a brand-new user
+async function migrateLegacy(userId) {
+  const imagesRef = imagesCollection(userId);
+  const existing = await imagesRef.limit(1).get();
+  if (!existing.empty) return false;
 
   const legacy = readHistory();
   if (!legacy.length) return false;
 
-  const rows = legacy.map((entry) => ({
-    id: entry.id,
-    user_id: userId,
-    prompt: entry.prompt,
-    width: entry.width,
-    height: entry.height,
-    seed: entry.seed,
-    url: entry.url,
-    favorite: false,
-    created_at: entry.createdAt,
-  }));
-
-  const { error: insertError } = await userClient.from("images").insert(rows);
-  if (insertError) throw insertError;
+  const batch = db.batch();
+  for (const entry of legacy) {
+    const id = entry.id || crypto.randomUUID();
+    batch.set(imagesRef.doc(id), {
+      prompt: entry.prompt,
+      width: entry.width,
+      height: entry.height,
+      seed: entry.seed,
+      url: entry.url,
+      favorite: false,
+      createdAt: admin.firestore.Timestamp.fromDate(new Date(entry.createdAt || Date.now())),
+    });
+  }
+  await batch.commit();
   return true;
 }
 
 // Return past prints, newest first
 app.get("/api/history", requireUser, asyncHandler(async (req, res) => {
-  if (!req.userClient) {
+  if (!db) {
     return res.json(readHistory().slice().reverse());
   }
 
   try {
-    await migrateLegacy(req.userClient, req.user.id);
-    const { data, error } = await req.userClient
-      .from("images")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(100);
-    if (error) throw error;
-    res.json((data || []).map(mapRow));
+    await migrateLegacy(req.user.id);
+    const snap = await imagesCollection(req.user.id)
+      .orderBy("createdAt", "desc")
+      .limit(100)
+      .get();
+    res.json(snap.docs.map(mapDoc));
   } catch (err) {
     console.error("History load failed:", err.message);
     res.status(500).json({ error: "Could not load your images." });
@@ -268,27 +306,20 @@ app.post("/api/generate", requireUser, asyncHandler(async (req, res) => {
       }
     }
 
-    const createdAt = new Date().toISOString();
+    const createdAt = new Date();
 
     let entry;
-    if (req.userClient) {
-      const { data, error } = await req.userClient
-        .from("images")
-        .insert({
-          id,
-          user_id: req.user.id,
-          prompt,
-          width,
-          height,
-          seed,
-          url,
-          favorite: false,
-          created_at: createdAt,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      entry = mapRow(data);
+    if (db) {
+      await imagesCollection(req.user.id).doc(id).set({
+        prompt,
+        width,
+        height,
+        seed,
+        url,
+        favorite: false,
+        createdAt: admin.firestore.Timestamp.fromDate(createdAt),
+      });
+      entry = { id, prompt, width, height, seed, url, favorite: false, createdAt: createdAt.toISOString() };
     } else {
       entry = {
         id,
@@ -298,7 +329,7 @@ app.post("/api/generate", requireUser, asyncHandler(async (req, res) => {
         seed,
         url,
         favorite: false,
-        createdAt,
+        createdAt: createdAt.toISOString(),
       };
       const history = readHistory();
       history.push(entry);
@@ -320,7 +351,7 @@ app.post("/api/delete", requireUser, asyncHandler(async (req, res) => {
     return res.status(400).json({ error: "An image id is required." });
   }
 
-  if (!req.userClient) {
+  if (!db) {
     const history = readHistory();
     const entry = history.find((e) => e.id === id);
     if (!entry) {
@@ -341,24 +372,14 @@ app.post("/api/delete", requireUser, asyncHandler(async (req, res) => {
   }
 
   try {
-    const { data, error } = await req.userClient
-      .from("images")
-      .select("url")
-      .eq("id", id)
-      .eq("user_id", req.user.id)
-      .single();
-    if (error || !data) {
+    const ref = imagesCollection(req.user.id).doc(id);
+    const doc = await ref.get();
+    if (!doc.exists) {
       return res.status(404).json({ error: "Image not found." });
     }
 
-    destroyCloudAsset(data.url);
-
-    const { error: deleteError } = await req.userClient
-      .from("images")
-      .delete()
-      .eq("id", id)
-      .eq("user_id", req.user.id);
-    if (deleteError) throw deleteError;
+    destroyCloudAsset(doc.data().url);
+    await ref.delete();
 
     res.json({ ok: true, id });
   } catch (err) {
@@ -369,7 +390,7 @@ app.post("/api/delete", requireUser, asyncHandler(async (req, res) => {
 
 // Toggle favorite state for an image
 app.post("/api/favorite", requireUser, asyncHandler(async (req, res) => {
-  if (!req.userClient) {
+  if (!db) {
     return res.json({ ok: true, favorite: Boolean(req.body.favorite) });
   }
 
@@ -379,17 +400,14 @@ app.post("/api/favorite", requireUser, asyncHandler(async (req, res) => {
   }
 
   try {
-    const { data, error } = await req.userClient
-      .from("images")
-      .update({ favorite: Boolean(req.body.favorite) })
-      .eq("id", id)
-      .eq("user_id", req.user.id)
-      .select("favorite")
-      .single();
-    if (error || !data) {
+    const ref = imagesCollection(req.user.id).doc(id);
+    const doc = await ref.get();
+    if (!doc.exists) {
       return res.status(404).json({ error: "Image not found." });
     }
-    res.json({ ok: true, id, favorite: data.favorite });
+    const favorite = Boolean(req.body.favorite);
+    await ref.update({ favorite });
+    res.json({ ok: true, id, favorite });
   } catch (err) {
     console.error("Favorite update failed:", err.message);
     res.status(500).json({ error: "Could not update the image." });
@@ -398,7 +416,7 @@ app.post("/api/favorite", requireUser, asyncHandler(async (req, res) => {
 
 // Update the display name shown on the user's profile
 app.post("/api/profile", requireUser, asyncHandler(async (req, res) => {
-  if (!req.userClient) {
+  if (!db) {
     return res.json({ ok: true, name: req.body.name || "User" });
   }
 
@@ -408,10 +426,14 @@ app.post("/api/profile", requireUser, asyncHandler(async (req, res) => {
   }
 
   try {
-    const { error } = await req.userClient
-      .from("profiles")
-      .upsert({ id: req.user.id, name }, { onConflict: "id" });
-    if (error) throw error;
+    await db.collection("profiles").doc(req.user.id).set(
+      {
+        name,
+        email: req.user.email || "",
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
     res.json({ ok: true, name });
   } catch (err) {
     console.error("Profile update failed:", err.message);
@@ -421,21 +443,15 @@ app.post("/api/profile", requireUser, asyncHandler(async (req, res) => {
 
 // Read the signed-in user's display name
 app.get("/api/profile", requireUser, asyncHandler(async (req, res) => {
-  if (!req.userClient) {
+  if (!db) {
     return res.json({ name: "User" });
   }
 
   try {
-    const { data, error } = await req.userClient
-      .from("profiles")
-      .select("name")
-      .eq("id", req.user.id)
-      .maybeSingle();
-    if (error) throw error;
-
+    const doc = await db.collection("profiles").doc(req.user.id).get();
     const fallback = (req.user.email || "user@pixora.ai").split("@")[0];
     const defaultName = fallback.charAt(0).toUpperCase() + fallback.slice(1);
-    res.json({ name: data?.name || defaultName });
+    res.json({ name: (doc.exists && doc.data().name) || defaultName });
   } catch (err) {
     console.error("Profile load failed:", err.message);
     res.status(500).json({ error: "Could not load your profile." });
@@ -446,7 +462,7 @@ app.get("/api/profile", requireUser, asyncHandler(async (req, res) => {
 app.post("/api/clear", requireUser, asyncHandler(async (req, res) => {
   const target = req.body.target;
 
-  if (!req.userClient) {
+  if (!db) {
     if (target === "history") {
       writeHistory([]);
     }
@@ -454,15 +470,17 @@ app.post("/api/clear", requireUser, asyncHandler(async (req, res) => {
   }
 
   try {
+    const imagesRef = imagesCollection(req.user.id);
     if (target === "history") {
-      const { error } = await req.userClient.from("images").delete().eq("user_id", req.user.id);
-      if (error) throw error;
+      const snap = await imagesRef.get();
+      const batch = db.batch();
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
     } else if (target === "favorites") {
-      const { error } = await req.userClient
-        .from("images")
-        .update({ favorite: false })
-        .eq("user_id", req.user.id);
-      if (error) throw error;
+      const snap = await imagesRef.where("favorite", "==", true).get();
+      const batch = db.batch();
+      snap.docs.forEach((d) => batch.update(d.ref, { favorite: false }));
+      await batch.commit();
     }
     res.json({ ok: true });
   } catch (err) {

@@ -45,7 +45,16 @@ import {
   EyeOff,
   Sparkles,
 } from 'lucide-react'
-import { supabase, authEnabled, getAccessToken } from './supabaseClient'
+import {
+  auth,
+  authEnabled,
+  getAccessToken,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile,
+} from './firebaseClient'
 
 const ASPECTS = [  { id: '1:1', w: 1, h: 1, label: '1:1' },
   { id: '4:3', w: 4, h: 3, label: '4:3' },
@@ -80,15 +89,23 @@ const VOWELS = new Set(['a', 'e', 'i', 'o', 'u', 'y'])
 
 function storageUid() {
   try {
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i)
-      if (!key || !/^sb-.*-auth-token$/.test(key)) continue
-      const parsed = JSON.parse(localStorage.getItem(key) || 'null')
-      const uid = parsed?.user?.id || parsed?.currentSession?.user?.id
-      if (uid) return uid
-    }
-  } catch {}
-  return 'guest'
+    return localStorage.getItem('pixora-uid') || 'guest'
+  } catch {
+    return 'guest'
+  }
+}
+
+function friendlyAuthError(err) {
+  const code = err?.code || ''
+  if (code.includes('email-already-in-use')) return 'That email is already registered. Try signing in instead.'
+  if (code.includes('invalid-email')) return 'Enter a valid email address.'
+  if (code.includes('weak-password')) return 'Password is too weak — use at least 6 characters.'
+  if (code.includes('user-not-found')) return 'No account found with that email.'
+  if (code.includes('wrong-password') || code.includes('invalid-credential')) return 'Incorrect email or password.'
+  if (code.includes('too-many-requests')) return 'Too many attempts. Please try again shortly.'
+  if (code.includes('network')) return 'Network error. Check your connection and try again.'
+  if (code.includes('operation-not-allowed')) return 'Email/password sign-in is not enabled for this project.'
+  return err?.message || 'Something went wrong.'
 }
 
 function readScopedStore(key, uid) {
@@ -1267,35 +1284,20 @@ function AuthModal({ onClose }) {
     const startedAt = Date.now()
     try {
       if (mode === 'signup') {
-        const { data, error: signUpError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { full_name: name } },
-        })
-        if (signUpError) throw signUpError
-        if (data.session) {
-          const token = await getAccessToken()
-          if (token) {
-            try {
-              await fetch('/api/profile', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ name: name.trim() }),
-              })
-            } catch {}
-          }
-        } else {
-          setMode('signin')
-          setStep(1)
-          setEmail('')
-          setPassword('')
-          setError('Account created! Check your inbox for a confirmation link, then sign in.')
-          setBusy(false)
-          return
+        const cred = await createUserWithEmailAndPassword(auth, email, password)
+        if (name.trim()) {
+          try { await updateProfile(cred.user, { displayName: name.trim() }) } catch {}
         }
+        try {
+          const token = await cred.user.getIdToken()
+          await fetch('/api/profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ name: name.trim() }),
+          })
+        } catch {}
       } else {
-        const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
-        if (signInError) throw signInError
+        await signInWithEmailAndPassword(auth, email, password)
       }
 
       const remaining = Math.max(0, 3000 - (Date.now() - startedAt))
@@ -1305,7 +1307,7 @@ function AuthModal({ onClose }) {
         setTimeout(() => onClose(), 1300)
       }, remaining)
     } catch (err) {
-      setError(err.message || 'Something went wrong.')
+      setError(friendlyAuthError(err))
       setBusy(false)
     }
   }
@@ -1627,25 +1629,17 @@ export default function App() {
       setAuthReady(true)
       return
     }
-    supabase.auth.getSession().then(async ({ data }) => {
-      if (!data.session) {
-        setSession(null)
-        setAuthReady(true)
-        return
-      }
-      const { data: userData, error } = await supabase.auth.getUser()
-      if (error || !userData.user) {
-        purgeLocalSession()
-        setSession(null)
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        try { localStorage.setItem('pixora-uid', user.uid) } catch {}
+        setSession({ user: { id: user.uid, email: user.email } })
       } else {
-        setSession(data.session)
+        try { localStorage.removeItem('pixora-uid') } catch {}
+        setSession(null)
       }
       setAuthReady(true)
     })
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession)
-    })
-    return () => sub.subscription.unsubscribe()
+    return () => unsub()
   }, [])
 
   useEffect(() => {
@@ -1957,22 +1951,16 @@ export default function App() {
     return { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }
   }
 
-  function purgeAuthToken() {
-    removeStore('supabase.auth.token')
-    try { sessionStorage.removeItem('supabase.auth.token') } catch {}
-  }
-
   function purgeLocalSession() {
-    purgeAuthToken()
     removeStore('pixora-history-cache')
     removeStore('pixora-notifs')
+    try { localStorage.removeItem('pixora-uid') } catch {}
     setSession(null)
   }
 
   async function forceClearSession() {
-    try { await supabase.auth.signOut({ scope: 'local' }) } catch {}
-    purgeAuthToken()
-    setSession(null)
+    try { await signOut(auth) } catch {}
+    purgeLocalSession()
   }
 
   async function loadHistory() {
